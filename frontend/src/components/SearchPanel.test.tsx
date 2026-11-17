@@ -64,7 +64,14 @@ describe('SearchPanel', () => {
 
   it('a truncated result set says so and tells the user to refine', async () => {
     await run({ truncated: true, limit: 500 });
-    expect(screen.getByText('Showing the first 500 results; refine the search.')).toBeTruthy();
+    expect(screen.getByText('Results were capped; refine the search.')).toBeTruthy();
+  });
+
+  it('the capped notice never claims a count it does not have: a short list (cut early by the helper) is not called "the first 500"', async () => {
+    await run({ truncated: true, limit: 500, total: 3 });
+    expect(screen.queryByText(/first \d+/)).toBeNull();
+    expect(screen.getByText('Results were capped; refine the search.')).toBeTruthy();
+    expect(screen.getByText(/Showing 3 matches in 2 files/)).toBeTruthy();
   });
 
   it('a snippet containing markup is shown as text, never as an element', async () => {

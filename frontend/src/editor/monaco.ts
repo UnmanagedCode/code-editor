@@ -82,11 +82,15 @@ export const monacoHost: EditorHost = {
       minimap: { enabled: false },
     });
     diff.setModel({ original, modified: (live as Model).inner });
-    // Ctrl/Cmd+S from the editable side saves, like the plain editor.
-    const save = shortcut(diff.getModifiedEditor(), 'code-editor.diff.save', 'Save', monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, options.onSave);
+    // Ctrl/Cmd+S and Ctrl/Cmd+P from the editable side work like in the plain editor.
+    const modified = diff.getModifiedEditor();
+    const shortcuts = [
+      shortcut(modified, 'code-editor.diff.save', 'Save', monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, options.onSave),
+      shortcut(modified, 'code-editor.diff.quickOpen', 'Quick open', monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, options.onQuickOpen),
+    ];
     return {
       dispose() {
-        save.dispose();
+        for (const a of shortcuts) a.dispose();
         diff.dispose();
         original.dispose();
       },

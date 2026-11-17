@@ -32,11 +32,16 @@ test('the CSP names exactly the sources the app needs and no remote origin', () 
 test('every kind of response carries the CSP: API 200, 404, error, bad JSON, unbuilt 503', async (t) => {
   const app = await setup(t);
   hasSecurityHeaders(await fetch(`${app.base}/api/health`));
-  hasSecurityHeaders(await fetch(`${app.base}/api/roots`));
+  const ok = await app.get('/api/roots');
+  assert.equal(ok.status, 200, 'a real 200 from the API router, sent with the CSRF header');
+  hasSecurityHeaders(ok);
   hasSecurityHeaders(await fetch(`${app.base}/nope`));
   hasSecurityHeaders(await fetch(`${app.base}/api/nope`));
   hasSecurityHeaders(await fetch(`${app.base}/`)); // unbuilt: 503
-  hasSecurityHeaders(await fetch(`${app.base}/api/list?path=`)); // 400
+  const invalid = await app.get('/api/list?path=');
+  assert.equal(invalid.status, 400);
+  hasSecurityHeaders(invalid);
+  hasSecurityHeaders(await fetch(`${app.base}/api/roots`)); // 403: no CSRF header
   const bad = await fetch(`${app.base}/api/rename`, { method: 'POST', headers: { 'content-type': 'application/json', origin: app.base, 'x-code-editor': '1' }, body: '{bad' });
   assert.equal(bad.status, 400);
   hasSecurityHeaders(bad);
@@ -182,4 +187,11 @@ test('the custom header is required on state-changing requests too, even with a 
   assert.equal(r.status, 403);
   const ok = await fetch(`${app.base}/api/entries`, { method: 'POST', headers: { 'content-type': 'application/json', origin: app.base, 'x-code-editor': '1' }, body });
   assert.equal(ok.status, 201);
+});
+
+test('every API response (200, 400, 403, 404) is Cache-Control: no-store; the static UI is not forced to', async (t) => {
+  const app = await setup(t);
+  const responses = [await app.get('/api/roots'), await app.get('/api/list?path='), await app.get('/api/nope'), await fetch(`${app.base}/api/roots`), await fetch(`${app.base}/api/health`)];
+  for (const r of responses) assert.equal(r.headers.get('cache-control'), 'no-store');
+  assert.notEqual((await fetch(`${app.base}/nope`)).headers.get('cache-control'), 'no-store');
 });

@@ -13,6 +13,8 @@ export function createApp({ distDir, limits = {} }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(securityHeaders);
+  // API answers are never cached: they describe live files.
+  app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
   const api = express.Router();

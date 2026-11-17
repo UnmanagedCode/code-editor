@@ -13,7 +13,7 @@ export type RootProject = {
 export type RootsResult = { projects: RootProject[] };
 
 export type EntryKind = 'file' | 'dir' | 'symlink' | 'other';
-export type LinkTarget = 'file' | 'dir' | 'other' | 'outside' | 'broken';
+export type LinkTarget = 'file' | 'dir' | 'other' | 'outside' | 'git' | 'broken';
 export type Entry = { name: string; kind: EntryKind; target?: LinkTarget; ignored: boolean; unsupported?: boolean };
 export type ListResult = { path: string; entries: Entry[]; truncated: boolean };
 

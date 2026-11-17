@@ -95,11 +95,12 @@ case $op in
       slash=
       if [ -L "$e" ]; then
         if t=$(realpath -e -- "$e" 2>/dev/null); then
-          if allowed "$t"; then
-            if [ -d "$t" ]; then kind=l:d; elif [ -f "$t" ]; then kind=l:f; else kind=l:o; fi
-          else
-            kind=l:outside
-          fi
+          allowed "$t"
+          case $? in
+            0) if [ -d "$t" ]; then kind=l:d; elif [ -f "$t" ]; then kind=l:f; else kind=l:o; fi ;;
+            1) kind=l:outside ;;
+            *) kind=l:git ;;
+          esac
         else
           kind=l:broken
         fi

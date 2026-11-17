@@ -121,6 +121,7 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
     if (req.mode === 'rename') {
       const from = join(req.dir, req.current!);
       const to = join(req.dir, name);
+      await files.settle(from); // a save in flight for the file (or one beneath it) lands first, on the path it was sent to
       await endpoints.rename(target, from, to);
       tabsApi.rename(from, to);
       tree.moved(from, to);
@@ -138,6 +139,7 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
 
   const confirmDelete = async () => {
     const req = deleteRequest!;
+    await files.settle(req.path);
     await endpoints.remove(target, req.path);
     tabsApi.drop(req.path, { subtree: true });
     if (req.isDir) tree.forget(req.path);
@@ -182,7 +184,7 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
       )}
       <div className="min-h-0 flex-1">
         {active ? (
-          active.diff ? <DiffPane key={`${active.path}:diff`} tab={active} narrow={narrow} onSave={saveActive} />
+          active.diff ? <DiffPane key={`${active.path}:diff`} tab={active} narrow={narrow} onSave={saveActive} onQuickOpen={openQuick} />
             : <EditorPane key={active.path} tab={active} narrow={narrow} onSave={saveActive} onQuickOpen={openQuick} onRevealed={() => tabsApi.dispatch({ type: 'revealed', id: active.id })} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">

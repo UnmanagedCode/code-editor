@@ -77,7 +77,7 @@ describe('QuickOpen', () => {
     expect((await screen.findByRole('option')).textContent).toBe('util.tssrc/lib/util.ts');
   });
 
-  it('refetches the list on every open and again after a file operation changes the tree', async () => {
+  it('refetches the list on every open', async () => {
     const { backend, user } = await setup();
     ctrlP();
     await screen.findAllByRole('option');
@@ -85,6 +85,29 @@ describe('QuickOpen', () => {
     await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
     ctrlP();
     await waitFor(() => expect(backend.calls.files).toBe(2));
+  });
+
+  it('after a file operation the cached list is dropped: reopening shows loading, then the new file', async () => {
+    const { user, backend } = await setup();
+    ctrlP();
+    await screen.findAllByRole('option');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
+    fireEvent.contextMenu(screen.getByTestId('tree-background'));
+    await user.click(await screen.findByRole('menuitem', { name: 'New file' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'brand-new.ts');
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await waitFor(() => expect(backend.calls.create).toEqual(['brand-new.ts']));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const real = vi.mocked(endpoints.files).getMockImplementation()!;
+    let finish!: () => void;
+    vi.mocked(endpoints.files).mockImplementation(() => new Promise((r) => { finish = () => void real(target).then(r); }));
+    ctrlP();
+    expect(await screen.findByText('Loading files…')).toBeTruthy();
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    finish();
+    expect((await screen.findAllByRole('option')).some((o) => o.textContent?.includes('brand-new.ts'))).toBe(true);
   });
 
   it('says when the list was cut off', async () => {

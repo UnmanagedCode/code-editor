@@ -20,6 +20,7 @@ export default async function ({ page, url, app, shot, check }) {
   const out = row(app, 'out');
   check(await out.getAttribute('aria-disabled') === 'true', 'a symlink to outside the root is disabled');
   check((await out.textContent()).includes('points outside the root'), 'and says why');
+  check((await row(app, 'gitlink').textContent()).includes('points into .git (not editable)'), 'a link into .git says so, not "outside"');
   check(await row(app, '.git').count() === 0, '.git is never listed');
   await shot('show-ignored');
   check(await editor(app).count() >= 1, 'the editor is still mounted');

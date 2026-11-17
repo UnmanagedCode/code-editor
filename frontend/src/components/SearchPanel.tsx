@@ -50,9 +50,9 @@ export function SearchPanel({ target, onOpen }: { target: Target; onOpen: (path:
         {state.status === 'done' && (
           <>
             <p className="px-1 pb-1 text-xs text-muted-foreground">
-              {state.result.total} {state.result.total === 1 ? 'match' : 'matches'} in {state.result.files.length} {state.result.files.length === 1 ? 'file' : 'files'} · {ENGINE_LABEL[state.result.engine]}
+              {state.result.truncated ? 'Showing ' : ''}{state.result.total} {state.result.total === 1 ? 'match' : 'matches'} in {state.result.files.length} {state.result.files.length === 1 ? 'file' : 'files'} · {ENGINE_LABEL[state.result.engine]}
             </p>
-            {state.result.truncated && <p className="px-1 pb-1 text-xs text-warning">Showing the first {state.result.limit} results; refine the search.</p>}
+            {state.result.truncated && <p className="px-1 pb-1 text-xs text-warning">Results were capped; refine the search.</p>}
             {state.result.files.length === 0 && <p className="p-1 text-muted-foreground">No results.</p>}
             {state.result.files.map((f) => (
               <div key={f.path}>

@@ -22,7 +22,7 @@ export interface DiffHandle {
   dispose(): void;
 }
 
-export type DiffOptions = { narrow: boolean; path: string; /** Ctrl/Cmd+S in the diff's editable (live) side. */ onSave: () => void };
+export type DiffOptions = { narrow: boolean; path: string; /** Ctrl/Cmd+S in the diff's editable (live) side. */ onSave: () => void; /** Ctrl/Cmd+P in the diff's editable side. */ onQuickOpen: () => void };
 
 export type MountOptions = { readOnly: boolean; narrow: boolean; onSave: () => void; onQuickOpen: () => void };
 

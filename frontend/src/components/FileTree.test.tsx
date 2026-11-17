@@ -86,6 +86,18 @@ describe('FileTree', () => {
     expect(screen.getByRole('treeitem', { name: /^inner/ }).getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('a link into .git is labelled as such (not as pointing outside), greyed and inert', async () => {
+    const backend = installBackend({ files: { 'a.txt': 'a' }, links: { gl: 'git', out: 'outside' } });
+    mount();
+    await screen.findByRole('treeitem', { name: /a\.txt/ });
+    const row = screen.getByRole('treeitem', { name: /^gl/ });
+    expect(row.textContent).toContain('points into .git (not editable)');
+    expect(row.textContent).not.toContain('outside');
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByRole('treeitem', { name: /^out/ }).textContent).toContain('points outside the root');
+    expect(backend.calls.read).toEqual([]);
+  });
+
   it('renders a hostile file name as literal text, never as an element', async () => {
     const name = '<img src=x onerror=alert(1)>.txt';
     installBackend({ files: { [name]: 'x' } });

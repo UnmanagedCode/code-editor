@@ -36,7 +36,7 @@ test('list classifies links: outside, broken, in-root dir; .git never appears', 
   const by = Object.fromEntries((await list('')).body.entries.map((e) => [e.name, e]));
   assert.equal(by.out.target, 'outside');
   assert.equal(by.outfile.target, 'outside');
-  assert.equal(by.gitlink.target, 'outside', 'a link into .git is never offered');
+  assert.equal(by.gitlink.target, 'git', 'a link into .git is never offered, and is labelled as such, not as an outside link');
   assert.equal(by.broken.target, 'broken');
   assert.equal(by.inner.target, 'dir');
   assert.equal(by['readme-link'].target, 'file');
@@ -161,7 +161,7 @@ test('a symlink to a NESTED .git is PATH_REFUSED for read, write, list, create, 
 test('the link itself can still be listed as outside and removed (acting on the link, not the nested .git)', async (t) => {
   const { list, del, root } = await setup(t);
   const by = Object.fromEntries((await list('')).body.entries.map((e) => [e.name, e]));
-  assert.equal(by.leak.target, 'outside', 'a link into a nested .git is never offered');
+  assert.equal(by.leak.target, 'git', 'a link into a nested .git is labelled as a .git link');
   assert.equal(by.leakdir.target, 'dir', 'a link to the directory holding it is an ordinary folder');
   assert.equal((await del('leak')).status, 200);
   assert.ok(fs.existsSync(path.join(root, 'vendor/foo/.git/config')));

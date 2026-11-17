@@ -213,6 +213,52 @@ describe('overlapping saves', () => {
   });
 });
 
+describe('rename and delete through a dialog opened before the save', () => {
+  const openDialog = async (user: ReturnType<typeof renderWithHost>['user'], item: 'Rename' | 'Delete') => {
+    await user.click(screen.getByRole('button', { name: 'Actions for a.txt' }));
+    await user.click(await screen.findByRole('menuitem', { name: item }));
+    return screen.findByRole('dialog');
+  };
+  const tick = () => new Promise((r) => setTimeout(r, 20));
+
+  it('a rename submitted while the file’s save is in flight is held until the save finishes, so the save is not misdirected', async () => {
+    const { fake, backend, user } = await open();
+    act(() => fake.modelFor('a.txt').type('typed\n'));
+    const dialog = await openDialog(user, 'Rename');
+    const input = within(dialog).getByRole('textbox', { name: 'Name' });
+    await user.clear(input);
+    await user.type(input, 'renamed.txt');
+    const release = holdNextWrite();
+    ctrlS(); // inside the open dialog
+    await waitFor(() => expect(backend.calls.write).toHaveLength(1));
+    await user.click(within(dialog).getByRole('button', { name: 'Rename' }));
+    await tick();
+    expect(backend.calls.rename).toEqual([]);
+    release();
+    await waitFor(() => expect(backend.calls.rename).toEqual([['a.txt', 'renamed.txt']]));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.getByRole('tab', { name: /renamed\.txt/ })).toBeTruthy());
+    expect(screen.queryByText('This file changed on disk since you opened it.')).toBeNull();
+    expect(dirtyDot()).toBeNull();
+    expect(backend.disk.get('renamed.txt')!.content).toBe('typed\n');
+  });
+
+  it('a delete confirmed while the file’s save is in flight is held until the save finishes', async () => {
+    const { fake, backend, user } = await open();
+    act(() => fake.modelFor('a.txt').type('typed\n'));
+    const dialog = await openDialog(user, 'Delete');
+    const release = holdNextWrite();
+    ctrlS();
+    await waitFor(() => expect(backend.calls.write).toHaveLength(1));
+    await user.click(within(dialog).getByRole('button', { name: /^Delete/ }));
+    await tick();
+    expect(backend.calls.remove).toEqual([]);
+    release();
+    await waitFor(() => expect(backend.calls.remove).toEqual(['a.txt']));
+    await waitFor(() => expect(screen.queryByRole('tab', { name: /a\.txt/ })).toBeNull());
+  });
+});
+
 describe('save conflict', () => {
   async function conflicted() {
     const ctx = await open();
@@ -304,6 +350,15 @@ describe('save conflict', () => {
     act(() => fake.diffs[0].options.onSave());
     await waitFor(() => expect(backend.calls.write.length).toBe(writes + 1));
     expect(backend.calls.write.at(-1)!.content).toBe('mine\n');
+  });
+
+  it('Ctrl/Cmd+P works from the diff too: the diff editor is given a quick-open handler that opens it', async () => {
+    const { user, fake } = await conflicted();
+    await user.click(screen.getByRole('button', { name: 'View diff' }));
+    await waitFor(() => expect(fake.diffs).toHaveLength(1));
+    expect(typeof fake.diffs[0].options.onQuickOpen).toBe('function');
+    act(() => fake.diffs[0].options.onQuickOpen());
+    expect(await screen.findByRole('combobox', { name: 'Find file' })).toBeTruthy();
   });
 
   it('the conflict bar is announced as an alert', async () => {

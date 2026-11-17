@@ -20,6 +20,7 @@ const noteFor = (e: Entry): string | null => {
   if (e.unsupported) return 'name is not valid UTF-8';
   if (e.kind === 'symlink') {
     if (e.target === 'outside') return 'points outside the root';
+    if (e.target === 'git') return 'points into .git (not editable)';
     if (e.target === 'broken') return 'broken link';
     if (e.target === 'other') return 'link to a special file';
   }
@@ -60,7 +61,7 @@ export function TreeRow({ entry, path, depth, expanded, active, locked, onToggle
         <Icon className="size-4 shrink-0 text-muted-foreground" />
         <span className="truncate">{entry.name}</span>
         {suffix && <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span>}
-        {note && <span className="shrink-0 text-xs text-muted-foreground">({note})</span>}
+        {note && <span className="min-w-0 shrink-[1000] truncate text-xs text-muted-foreground">({note})</span>}
       </button>
       {!entry.unsupported && (
         <DropdownMenu>

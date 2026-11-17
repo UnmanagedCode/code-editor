@@ -19,7 +19,7 @@ export default async function ({ page, url, app, shot, check }) {
   await app.getByRole('button', { name: 'Regex', exact: true }).click();
   await q.fill('repeat');
   await q.press('Enter');
-  await app.getByText(/Showing the first \d+ results; refine the search\./).waitFor();
+  await app.getByText('Results were capped; refine the search.').waitFor();
   await shot('truncated');
 
   await q.fill('repeat-400 ');

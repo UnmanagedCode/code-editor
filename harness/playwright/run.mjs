@@ -12,6 +12,7 @@ import { requireBuilt, seed } from './seed.mjs';
 const { launchBrowser } = await import(BROWSER);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(here, 'out');
+fs.rmSync(outDir, { recursive: true, force: true }); // no stale screenshots from an earlier run
 fs.mkdirSync(outDir, { recursive: true });
 requireBuilt();
 

@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { EditorHost } from '@/editor/EditorHost';
 import { ApiError } from '@/lib/api';
 import { endpoints, type FileResult, type Target } from '@/lib/endpoints';
+import { isUnder } from '@/lib/paths';
 import { isDirty, newTabId, type Tab, type TabsAction } from './tabs';
 
 type TabsApi = {
@@ -121,6 +122,12 @@ export function useFileActions({ target, host, tabs, onOpened }: { target: Targe
     return ok;
   }, [save]);
 
+  /** Resolves when every queued or in-flight save of a tab at or under `path` has finished (a rename or delete must not overtake it). */
+  const settle = useCallback(async (path: string) => {
+    const pending = tabsRef.current.getTabs().filter((t) => isUnder(t.path, path)).map((t) => queues.current.get(t.id)).filter((p): p is Promise<unknown> => p !== undefined);
+    await Promise.allSettled(pending);
+  }, []);
+
   /** Reads the disk version afresh and shows it against the live buffer. */
   const viewDiff = useCallback(async (path: string) => {
     const tab = byPath(path);
@@ -176,5 +183,5 @@ export function useFileActions({ target, host, tabs, onOpened }: { target: Targe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target.project, target.worktree]);
 
-  return { error, clearError: () => setError(null), report: (e: unknown) => setError(asApiError(e)), busy, openFile, save, saveAll, viewDiff, overwrite, reload };
+  return { error, clearError: () => setError(null), report: (e: unknown) => setError(asApiError(e)), busy, openFile, save, saveAll, settle, viewDiff, overwrite, reload };
 }

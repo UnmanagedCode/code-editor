@@ -2,7 +2,7 @@
 
 - **Entry points.** Plugin nav (root picker: projects with nested worktrees; unreachable or unreadable projects listed disabled with their reason) and the project/worktree ⋮ menu items. The header shows the open root as text (`project` or `project / worktree`) plus a `system · remoteId` badge for non-local projects. The route is in the query string (see protocol).
 - **Switching root** with unsaved buffers asks: Save all / Discard / Cancel (Cancel restores the URL).
-- **Tree.** Lazy per folder; a Refresh button in the tree header re-lists every expanded folder; `.git` is never listed; gitignored entries hidden unless "Show ignored"; symlinks show a link icon and target kind; links pointing outside the root or broken are greyed and not openable. Names render as text only.
+- **Tree.** Lazy per folder; a Refresh button in the tree header re-lists every expanded folder; `.git` is never listed; gitignored entries hidden unless "Show ignored"; symlinks show a link icon and target kind; links pointing outside the root, into a `.git` directory, or broken are greyed, labelled and not openable. Names render as text only.
 - **Editor.** Monaco tab per file, language from the file name, theme follows cc live. Binary files show a placeholder; files over `MAX_EDIT_BYTES` open read-only with a notice naming size and limit.
 - **Save.** Ctrl/Cmd+S or the Save button. Closing a dirty tab asks Save / Discard / Cancel; `beforeunload` guards reload while any buffer is dirty.
 - **Conflict.** A save refused because the file changed (or was deleted) on disk shows a bar: **View diff** (disk read-only vs live buffer), **Overwrite** (re-saves against the disk version you were shown; a further change conflicts again), **Reload** (replaces the buffer).

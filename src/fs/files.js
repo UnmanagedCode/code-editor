@@ -25,7 +25,7 @@ export function decodeName(buf) {
   try { return { text: strict.decode(buf), ok: true }; } catch { return { text: buf.toString('utf8'), ok: false }; }
 }
 
-const LINK_TARGETS = { 'l:d': 'dir', 'l:f': 'file', 'l:o': 'other', 'l:outside': 'outside', 'l:broken': 'broken' };
+const LINK_TARGETS = { 'l:d': 'dir', 'l:f': 'file', 'l:o': 'other', 'l:outside': 'outside', 'l:git': 'git', 'l:broken': 'broken' };
 const PLAIN_KINDS = { d: 'dir', f: 'file', o: 'other' };
 
 const isDirLike = (e) => e.kind === 'dir' || (e.kind === 'symlink' && e.target === 'dir');
