@@ -4,6 +4,7 @@ export type Target = { project: string; worktree: string | null };
 
 export type RootProject = {
   name: string;
+  workspace: string | null;
   system: string;
   remoteId: string | null;
   unreachable: string | null;

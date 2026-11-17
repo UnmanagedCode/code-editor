@@ -1,9 +1,13 @@
-import { FolderGitIcon } from 'lucide-react';
+import { CheckIcon, ChevronRightIcon, FolderGitIcon } from 'lucide-react';
 import { useState } from 'react';
+import { RefusalAlert } from '@/components/RefusalAlert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import type { ApiError } from '@/lib/api';
 import type { RootProject } from '@/lib/endpoints';
+import { groupKey, groupLabel, groupRoots } from '@/lib/rootFilter';
 
 export type RootChoice = { project: string; worktree: string | null };
 
@@ -16,60 +20,101 @@ export function SystemBadge({ system, remoteId }: { system: string; remoteId: st
   return <Badge variant="outline">{remoteId ? `${system} · ${remoteId}` : system}</Badge>;
 }
 
-function RootRow({ label, disabledReason, onPick, badge, nested }: { label: string; disabledReason: string | null; onPick: () => void; badge?: React.ReactNode; nested?: boolean }) {
+const ROW = 'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent';
+
+function CurrentMark({ current }: { current: boolean }) {
+  return current ? <CheckIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" /> : null;
+}
+
+function ProjectRow({ project, worktreeHit, current, onPick }: { project: RootProject; worktreeHit: boolean; current: RootChoice | null; onPick: (r: RootChoice) => void }) {
+  const reason = project.unreachable ?? project.degraded;
+  const isCurrent = current?.project === project.name;
+  const [expanded, setExpanded] = useState(worktreeHit || (isCurrent && current.worktree !== null));
+  const mainIsCurrent = isCurrent && current.worktree === null;
+  const showCheckouts = expanded && reason === null;
+  const pickMain = () => onPick({ project: project.name, worktree: null });
   return (
     <li>
-      <button
-        type="button"
-        disabled={disabledReason !== null}
-        onClick={onPick}
-        className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent focus-visible:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent ${nested ? 'pl-8' : ''}`}
-      >
-        <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
-        {badge}
-        {disabledReason !== null && <span className="max-w-[50%] truncate text-xs text-muted-foreground">{disabledReason}</span>}
-      </button>
+      <div className="flex items-center gap-1">
+        <Button type="button" variant="ghost" size="icon-sm" aria-expanded={expanded} aria-label={`Show worktrees of ${project.name}`} disabled={reason !== null} onClick={() => setExpanded((e) => !e)}>
+          <ChevronRightIcon className={expanded ? 'rotate-90' : ''} />
+        </Button>
+        <button type="button" disabled={reason !== null} aria-current={mainIsCurrent && !showCheckouts ? 'true' : undefined} onClick={pickMain} className={ROW}>
+          <span className="min-w-0 flex-1 truncate font-medium">{project.name}</span>
+          <CurrentMark current={mainIsCurrent && !showCheckouts} />
+          <SystemBadge system={project.system} remoteId={project.remoteId} />
+        </button>
+      </div>
+      {reason !== null && <p className="ml-9 truncate text-xs text-muted-foreground" title={reason}>{reason}</p>}
+      {showCheckouts && (
+        <ul aria-label={`Checkouts of ${project.name}`} className="ml-9 flex flex-col">
+          <li>
+            <button type="button" aria-current={mainIsCurrent ? 'true' : undefined} onClick={pickMain} className={`${ROW} w-full`}>
+              <span className="min-w-0 flex-1 truncate">(main checkout)</span>
+              <CurrentMark current={mainIsCurrent} />
+            </button>
+          </li>
+          {project.worktrees.map((w) => {
+            const here = isCurrent && current.worktree === w.name;
+            return (
+              <li key={w.name}>
+                <button type="button" aria-current={here ? 'true' : undefined} onClick={() => onPick({ project: project.name, worktree: w.name })} className={`${ROW} w-full`}>
+                  <span className="min-w-0 flex-1 truncate">{w.name}</span>
+                  <CurrentMark current={here} />
+                  {w.branch && <span className="max-w-[50%] truncate font-mono text-xs text-muted-foreground">{w.branch}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </li>
   );
 }
 
-/** Projects with their worktrees nested; an unreachable or unreadable project is listed disabled with its reason. */
-export function RootList({ projects, onPick }: { projects: RootProject[]; onPick: (r: RootChoice) => void }) {
-  if (projects.length === 0) return <p className="p-2 text-sm text-muted-foreground">No projects.</p>;
+/** The filterable, workspace-grouped project list: used in the header dialog and on the landing page. */
+export function RootBrowser({ projects, error, current, onRetry, onPick, inDialog }: { projects: RootProject[] | null; error: ApiError | null; current: RootChoice | null; onRetry: () => void; onPick: (r: RootChoice) => void; inDialog?: boolean }) {
+  const [filter, setFilter] = useState('');
+  const groups = projects ? groupRoots(projects, filter) : [];
   return (
-    <ul className="flex flex-col" aria-label="Projects">
-      {projects.map((p) => {
-        const reason = p.unreachable ?? p.degraded;
-        return (
-          <div key={p.name}>
-            <RootRow label={p.name} disabledReason={reason} onPick={() => onPick({ project: p.name, worktree: null })} badge={<SystemBadge system={p.system} remoteId={p.remoteId} />} />
-            {reason === null && p.worktrees.map((w) => (
-              <RootRow key={w.name} nested label={w.name} disabledReason={null} onPick={() => onPick({ project: p.name, worktree: w.name })} badge={w.branch ? <span className="truncate text-xs text-muted-foreground">{w.branch}</span> : undefined} />
-            ))}
-          </div>
-        );
-      })}
-    </ul>
+    <div className="flex min-h-0 min-w-0 flex-col gap-3">
+      <Input type="text" aria-label="Filter projects" placeholder="Filter projects" value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <div data-slot="root-list" className={inDialog ? 'min-w-0 max-h-[60dvh] overflow-y-auto pr-1' : 'min-w-0'}>
+        {error && <RefusalAlert title="Cannot load projects" error={error} onRetry={onRetry} />}
+        {projects === null && !error && <p className="p-2 text-sm text-muted-foreground">Loading projects…</p>}
+        {projects !== null && groups.length === 0 && <p className="p-2 text-sm text-muted-foreground">{projects.length === 0 && !filter.trim() ? 'No projects.' : 'No project matches.'}</p>}
+        {groups.map((g) => (
+          <section key={groupKey(g)} aria-label={groupLabel(g)} className="mt-2 first:mt-0">
+            <h3 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{groupLabel(g)}</h3>
+            <ul className="flex flex-col">
+              {g.projects.map(({ project, worktreeHit }) => (
+                <ProjectRow key={`${groupKey(g)}:${project.name}:${worktreeHit}`} project={project} worktreeHit={worktreeHit} current={current} onPick={onPick} />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </div>
   );
 }
 
 /** The open root as text in the header, opening a dialog to switch. */
-export function RootPicker({ root, system, projects, onPick }: { root: RootChoice; system: { system: string; remoteId: string | null } | null; projects: RootProject[]; onPick: (r: RootChoice) => void }) {
+export function RootPicker({ root, system, projects, error, onRetry, onOpen, onPick }: { root: RootChoice; system: { system: string; remoteId: string | null } | null; projects: RootProject[] | null; error: ApiError | null; onRetry: () => void; onOpen: () => void; onPick: (r: RootChoice) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)} aria-label={`Open root: ${rootLabel(root)}. Switch root`} className="max-w-[60vw]">
+      <Button type="button" variant="outline" size="sm" onClick={() => { setOpen(true); onOpen(); }} aria-label={`Open root: ${rootLabel(root)}. Switch root`} className="max-w-[60vw]">
         <FolderGitIcon />
         <span className="truncate">{rootLabel(root)}</span>
         {system && <SystemBadge {...system} />}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Open a project</DialogTitle>
-            <DialogDescription>Pick a project or one of its worktrees.</DialogDescription>
+            <DialogDescription>Projects registered in code-conductor, on any System.</DialogDescription>
           </DialogHeader>
-          <RootList projects={projects} onPick={(r) => { setOpen(false); onPick(r); }} />
+          <RootBrowser inDialog projects={projects} error={error} current={root} onRetry={onRetry} onPick={(r) => { setOpen(false); onPick(r); }} />
         </DialogContent>
       </Dialog>
     </>

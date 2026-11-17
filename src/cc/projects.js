@@ -9,6 +9,7 @@ export async function listRoots() {
   const projects = rows.map((p) => ({
     name: String(p.name),
     system: typeof p.system === 'string' ? p.system : 'local',
+    workspace: typeof p.workspace === 'string' && p.workspace ? p.workspace : null,
     remoteId: typeof p.remoteId === 'string' ? p.remoteId : null,
     unreachable: typeof p.systemUnreachable === 'string' ? p.systemUnreachable : null,
     degraded: typeof p.degraded === 'string' ? p.degraded : (p.path ? null : 'no path'),

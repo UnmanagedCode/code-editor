@@ -2,26 +2,23 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import { endpoints, type RootProject } from '@/lib/endpoints';
 
-export type RootsState =
-  | { status: 'loading' }
-  | { status: 'ready'; projects: RootProject[] }
-  | { status: 'error'; error: ApiError };
-
-/** The projects and worktrees cc offers, loaded once and on `reload`. */
+/** The projects and worktrees cc offers, loaded on mount and on `reload`. The last good list stays while a reload runs or fails. */
 export function useRoots() {
-  const [state, setState] = useState<RootsState>({ status: 'loading' });
+  const [projects, setProjects] = useState<RootProject[] | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setState({ status: 'loading' });
+    setLoading(true);
     endpoints.roots(controller.signal).then(
-      (r) => setState({ status: 'ready', projects: r.projects }),
-      (e) => { if (!controller.signal.aborted) setState({ status: 'error', error: e instanceof ApiError ? e : new ApiError(0, String(e)) }); },
+      (r) => { setProjects(r.projects); setError(null); setLoading(false); },
+      (e) => { if (!controller.signal.aborted) { setError(e instanceof ApiError ? e : new ApiError(0, String(e))); setLoading(false); } },
     );
     return () => controller.abort();
   }, [nonce]);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
-  return { state, reload };
+  return { projects, error, loading, reload };
 }
 
 /** The root a pending cc request names, when api/roots lists it (the worktree too, if one was named). */

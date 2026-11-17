@@ -18,7 +18,7 @@ default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsa
 | Request | Body / query | 200 |
 |---|---|---|
 | `GET api/health` | — | `{ok}` |
-| `GET api/roots` | — | `{projects: [{name, system, remoteId, unreachable, degraded, worktrees: [{name, branch}]}]}` |
+| `GET api/roots` | — | `{projects: [{name, workspace (string or null), system, remoteId, unreachable, degraded, worktrees: [{name, branch}]}]}` |
 | `GET api/list` | `path` ('' = root) | `{path, entries: [{name, kind: file\|dir\|symlink\|other, target?: file\|dir\|other\|outside\|git\|broken, ignored, unsupported?}], truncated}` dirs first |
 | `GET api/file` | `path` | `{path, size, kind: text\|binary, content?, hash?, truncated, readOnly, limitBytes}`; `hash` = sha256 of the bytes read (absent when truncated) |
 | `PUT api/file` | `{path, content, expectedHash: string\|null}` (null = must not exist) | `{hash, size}`; stale → 409 `SAVE_CONFLICT {currentHash: string\|null}` |

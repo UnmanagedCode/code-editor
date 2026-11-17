@@ -6,7 +6,7 @@ export const options = { embedded: true };
 export default async function ({ page, url, app, shot, check }) {
   const frame = () => page.frames().find((f) => f.url().includes('/plugins/code-editor/'));
   await page.goto(`${url}/`);
-  await app.getByRole('list', { name: 'Projects', exact: true }).waitFor();
+  await app.getByRole('textbox', { name: 'Filter projects', exact: true }).waitFor();
   check(true, 'no root yet: the picker is shown');
 
   // cc's navigate (replace + popstate) for a worktree row's ⋮ "Edit files".
