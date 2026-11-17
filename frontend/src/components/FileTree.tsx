@@ -51,16 +51,19 @@ export function FileTree({ tree, rootName, showIgnored, activePath, onOpen, onAc
   if (root?.status === 'error' && root.entries.length === 0) {
     return <div className="p-2"><RefusalAlert title={`Cannot list ${rootName}`} error={root.error} onRetry={() => tree.reload([''])} /></div>;
   }
+  // The rows carry their own menus; the blank space below them is the root's (the two are siblings, never nested, so a
+  // long-press on a row opens only that row's menu).
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div role="tree" aria-label="Files" className="min-h-full py-1">
-          {!root || (root.status === 'loading' && root.entries.length === 0)
-            ? <p className="flex items-center gap-1.5 p-2 text-xs text-muted-foreground"><LoaderCircleIcon className="size-3 animate-spin" /> Loading…</p>
-            : <Children tree={tree} dir="" depth={0} showIgnored={showIgnored} activePath={activePath} onOpen={onOpen} onAction={onAction} />}
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent><EntryContextItems entry={{ path: '', kind: 'dir', dir: '', isRoot: true }} onAction={onAction} /></ContextMenuContent>
-    </ContextMenu>
+    <div className="flex min-h-full flex-col py-1">
+      <div role="tree" aria-label="Files">
+        {!root || (root.status === 'loading' && root.entries.length === 0)
+          ? <p className="flex items-center gap-1.5 p-2 text-xs text-muted-foreground"><LoaderCircleIcon className="size-3 animate-spin" /> Loading…</p>
+          : <Children tree={tree} dir="" depth={0} showIgnored={showIgnored} activePath={activePath} onOpen={onOpen} onAction={onAction} />}
+      </div>
+      <ContextMenu>
+        <ContextMenuTrigger asChild><div data-testid="tree-background" className="min-h-16 flex-1" /></ContextMenuTrigger>
+        <ContextMenuContent><EntryContextItems entry={{ path: '', kind: 'dir', dir: '', isRoot: true }} onAction={onAction} /></ContextMenuContent>
+      </ContextMenu>
+    </div>
   );
 }

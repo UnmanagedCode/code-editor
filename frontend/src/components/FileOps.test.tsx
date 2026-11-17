@@ -26,16 +26,17 @@ describe('entry menus', () => {
     for (const label of ['New file', 'New folder', 'Rename', 'Delete']) expect(within(menu).getByRole('menuitem', { name: label })).toBeTruthy();
   });
 
-  it('right-click opens the same items as a context menu on a row', async () => {
+  it('right-click opens the same items as a context menu on a row, and only that row’s menu', async () => {
     await setup();
     fireEvent.contextMenu(screen.getByRole('treeitem', { name: /a\.txt/ }));
     const menu = await screen.findByRole('menu');
+    expect(screen.getAllByRole('menu')).toHaveLength(1);
     expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['New file', 'New folder', 'Rename', 'Delete']);
   });
 
   it('the tree background menu creates at the root and has no Rename or Delete', async () => {
     await setup();
-    fireEvent.contextMenu(screen.getByRole('tree'));
+    fireEvent.contextMenu(screen.getByTestId('tree-background'));
     const menu = await screen.findByRole('menu');
     expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['New file', 'New folder']);
   });
@@ -82,7 +83,7 @@ describe('create', () => {
 
   it('New folder creates and expands it', async () => {
     const { user, backend } = await setup();
-    fireEvent.contextMenu(screen.getByRole('tree'));
+    fireEvent.contextMenu(screen.getByTestId('tree-background'));
     await user.click(await screen.findByRole('menuitem', { name: 'New folder' }));
     const d = await dialog();
     await user.type(within(d).getByRole('textbox', { name: 'Name' }), 'docs');

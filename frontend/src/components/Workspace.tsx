@@ -181,7 +181,9 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
             : <EditorPane key={active.path} tab={active} narrow={narrow} onSave={saveActive} onQuickOpen={openQuick} onRevealed={() => tabsApi.dispatch({ type: 'revealed', path: active.path })} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
-            <p>Open a file from the tree, or press <kbd className="rounded border px-1">Ctrl</kbd>+<kbd className="rounded border px-1">P</kbd> to find one.</p>
+            {narrow
+              ? <p>Open a file from the Files menu, or use Quick open to find one.</p>
+              : <p>Open a file from the tree, or press <kbd className="rounded border px-1">Ctrl</kbd>+<kbd className="rounded border px-1">P</kbd> to find one.</p>}
             {!narrow && <Button type="button" variant="outline" size="sm" onClick={openQuick}><FileSearchIcon /> Quick open</Button>}
           </div>
         )}

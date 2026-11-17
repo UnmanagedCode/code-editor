@@ -24,6 +24,12 @@ describe('phone layout (below md)', () => {
     for (const name of ['Files', 'Search', 'Quick open', 'Save file']) expect(screen.getByRole('button', { name })).toBeTruthy();
   });
 
+  it('the empty state points to the Files menu, not to a keyboard shortcut a phone lacks', async () => {
+    await phone();
+    expect(screen.queryByText(/Ctrl/)).toBeNull();
+    expect(screen.getByText(/Open a file from the Files menu/)).toBeTruthy();
+  });
+
   it('the Files button opens a sheet with the tree; opening a file closes the sheet and opens the tab', async () => {
     const { user, backend } = await phone();
     await user.click(screen.getByRole('button', { name: 'Files' }));

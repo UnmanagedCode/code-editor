@@ -72,6 +72,11 @@ describe('editing and saving', () => {
     expect(fake.liveMounts()).toHaveLength(0);
   });
 
+  it('a binary tab is not labelled read-only (it is not editable at all)', async () => {
+    await open('blob.bin');
+    expect(screen.getByRole('tab', { name: /blob\.bin/ }).textContent).not.toContain('read-only');
+  });
+
   it('a file over the limit opens read-only with a notice naming its size and the limit', async () => {
     const { fake } = await open('big.txt');
     expect(await screen.findByText(/This file is 9999999 bytes; showing the first 2097152 bytes, read-only\./)).toBeTruthy();
