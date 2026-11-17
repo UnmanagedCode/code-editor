@@ -141,6 +141,37 @@ describe('RootPicker dialog', () => {
   });
 });
 
+describe('RootPicker details', () => {
+  it('the filter clears when the dialog is reopened', async () => {
+    const { user } = setup();
+    let dialog = await open(user);
+    await user.type(within(dialog).getByRole('textbox', { name: 'Filter projects' }), 'box');
+    expect(within(dialog).getAllByRole('region')).toHaveLength(1);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    dialog = await open(user);
+    expect((within(dialog).getByRole('textbox', { name: 'Filter projects' }) as HTMLInputElement).value).toBe('');
+    expect(within(dialog).getAllByRole('region')).toHaveLength(2);
+  });
+
+  it('with the open root on a main checkout, exactly one target is current: the name when collapsed, "(main checkout)" when expanded', async () => {
+    const { user } = setup({ root: { project: 'app', worktree: null } });
+    const dialog = await open(user);
+    const current = () => within(dialog).getAllByRole('button').filter((b) => b.getAttribute('aria-current') === 'true').map((b) => b.textContent);
+    expect(current()).toEqual(['app']);
+    await user.click(within(dialog).getByRole('button', { name: 'Show worktrees of app' }));
+    expect(current()).toEqual(['(main checkout)']);
+  });
+
+  it('with no projects and no filter it says "No projects."', async () => {
+    const { user } = setup({ projects: [] });
+    const dialog = await open(user);
+    expect(within(dialog).getByText('No projects.')).toBeTruthy();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Filter projects' }), 'x');
+    expect(within(dialog).getByText('No project matches.')).toBeTruthy();
+  });
+});
+
 describe('RootBrowser states', () => {
   const browse = (over: Partial<Parameters<typeof RootBrowser>[0]> = {}) => {
     const props = { projects: PROJECTS, error: null, current: null, onRetry: vi.fn(), onPick: vi.fn(), ...over };

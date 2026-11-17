@@ -43,7 +43,8 @@ export async function seed() {
 
     const fake = await fakeCc({
       projects: {
-        app: { dir: app.root, workspace: 'team', worktrees: { wt1: wt.root } },
+        app: { dir: app.root, workspace: 'team', worktrees: { wt1: wt.root, 'a-worktree-with-an-extremely-long-name-that-must-truncate-instead-of-overflowing': wt.root } },
+        'a-project-with-an-extremely-long-name-that-must-truncate-instead-of-overflowing-the-dialog': { dir: gone.root },
         box: { dir: box.root, workspace: 'team', system: 'docker', remoteId: 'box' },
         down: { dir: gone.root, system: 'docker', remoteId: 'down-box' },
         gone: { dir: gone.root, system: 'docker', remoteId: 'gone-box', systemUnreachable: 'provider died' },

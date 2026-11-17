@@ -30,6 +30,8 @@ function ProjectRow({ project, worktreeHit, current, onPick }: { project: RootPr
   const reason = project.unreachable ?? project.degraded;
   const isCurrent = current?.project === project.name;
   const [expanded, setExpanded] = useState(worktreeHit || (isCurrent && current.worktree !== null));
+  const mainIsCurrent = isCurrent && current.worktree === null;
+  const showCheckouts = expanded && reason === null;
   const pickMain = () => onPick({ project: project.name, worktree: null });
   return (
     <li>
@@ -37,18 +39,19 @@ function ProjectRow({ project, worktreeHit, current, onPick }: { project: RootPr
         <Button type="button" variant="ghost" size="icon-sm" aria-expanded={expanded} aria-label={`Show worktrees of ${project.name}`} disabled={reason !== null} onClick={() => setExpanded((e) => !e)}>
           <ChevronRightIcon className={expanded ? 'rotate-90' : ''} />
         </Button>
-        <button type="button" disabled={reason !== null} aria-current={isCurrent && current.worktree === null ? 'true' : undefined} onClick={pickMain} className={ROW}>
+        <button type="button" disabled={reason !== null} aria-current={mainIsCurrent && !showCheckouts ? 'true' : undefined} onClick={pickMain} className={ROW}>
           <span className="min-w-0 flex-1 truncate font-medium">{project.name}</span>
-          <CurrentMark current={isCurrent && current.worktree === null} />
+          <CurrentMark current={mainIsCurrent && !showCheckouts} />
           <SystemBadge system={project.system} remoteId={project.remoteId} />
         </button>
       </div>
       {reason !== null && <p className="ml-9 truncate text-xs text-muted-foreground" title={reason}>{reason}</p>}
-      {expanded && reason === null && (
+      {showCheckouts && (
         <ul aria-label={`Checkouts of ${project.name}`} className="ml-9 flex flex-col">
           <li>
-            <button type="button" aria-current={isCurrent && current.worktree === null ? 'true' : undefined} onClick={pickMain} className={`${ROW} w-full`}>
+            <button type="button" aria-current={mainIsCurrent ? 'true' : undefined} onClick={pickMain} className={`${ROW} w-full`}>
               <span className="min-w-0 flex-1 truncate">(main checkout)</span>
+              <CurrentMark current={mainIsCurrent} />
             </button>
           </li>
           {project.worktrees.map((w) => {
@@ -70,16 +73,16 @@ function ProjectRow({ project, worktreeHit, current, onPick }: { project: RootPr
 }
 
 /** The filterable, workspace-grouped project list: used in the header dialog and on the landing page. */
-export function RootBrowser({ projects, error, current, onRetry, onPick, autoFocus }: { projects: RootProject[] | null; error: ApiError | null; current: RootChoice | null; onRetry: () => void; onPick: (r: RootChoice) => void; autoFocus?: boolean }) {
+export function RootBrowser({ projects, error, current, onRetry, onPick, inDialog }: { projects: RootProject[] | null; error: ApiError | null; current: RootChoice | null; onRetry: () => void; onPick: (r: RootChoice) => void; inDialog?: boolean }) {
   const [filter, setFilter] = useState('');
   const groups = projects ? groupRoots(projects, filter) : [];
   return (
-    <div className="flex min-h-0 flex-col gap-3">
-      <Input type="text" aria-label="Filter projects" placeholder="Filter projects" autoFocus={autoFocus} value={filter} onChange={(e) => setFilter(e.target.value)} />
-      <div className={autoFocus ? 'max-h-[60dvh] overflow-y-auto pr-1' : ''}>
+    <div className="flex min-h-0 min-w-0 flex-col gap-3">
+      <Input type="text" aria-label="Filter projects" placeholder="Filter projects" value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <div className={inDialog ? 'min-w-0 max-h-[60dvh] overflow-y-auto pr-1' : 'min-w-0'}>
         {error && <RefusalAlert title="Cannot load projects" error={error} onRetry={onRetry} />}
         {projects === null && !error && <p className="p-2 text-sm text-muted-foreground">Loading projects…</p>}
-        {projects !== null && groups.length === 0 && <p className="p-2 text-sm text-muted-foreground">No project matches.</p>}
+        {projects !== null && groups.length === 0 && <p className="p-2 text-sm text-muted-foreground">{projects.length === 0 && !filter.trim() ? 'No projects.' : 'No project matches.'}</p>}
         {groups.map((g) => (
           <section key={groupKey(g)} aria-label={groupLabel(g)} className="mt-2 first:mt-0">
             <h3 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{groupLabel(g)}</h3>
@@ -111,7 +114,7 @@ export function RootPicker({ root, system, projects, error, onRetry, onOpen, onP
             <DialogTitle>Open a project</DialogTitle>
             <DialogDescription>Projects registered in code-conductor, on any System.</DialogDescription>
           </DialogHeader>
-          <RootBrowser autoFocus projects={projects} error={error} current={root} onRetry={onRetry} onPick={(r) => { setOpen(false); onPick(r); }} />
+          <RootBrowser inDialog projects={projects} error={error} current={root} onRetry={onRetry} onPick={(r) => { setOpen(false); onPick(r); }} />
         </DialogContent>
       </Dialog>
     </>

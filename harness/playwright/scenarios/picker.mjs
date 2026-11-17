@@ -33,6 +33,7 @@ export default async function ({ page, url, app, shot, check }) {
   check(await dialogFilter.evaluate((el) => el === el.ownerDocument.activeElement), 'the dialog filter has focus');
   check(await dialog.getByRole('button', { name: /^wt1/ }).getAttribute('aria-current') === 'true', 'the open worktree is marked current');
   check(await dialog.getByRole('button', { name: 'Show worktrees of app', exact: true }).getAttribute('aria-expanded') === 'true', 'and its project is pre-expanded');
+  check(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth), 'long names do not overflow the dialog horizontally');
   await shot('dialog-current');
 
   await dialogFilter.fill('zzz');

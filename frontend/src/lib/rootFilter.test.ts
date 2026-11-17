@@ -8,6 +8,24 @@ const PROJECTS = [
   p('pp', { workspace: 'Acme' }), p('amber'),
 ];
 
+describe('matching is a case-insensitive substring', () => {
+  const names = (filter: string, list: RootProject[]) => groupRoots(list, filter).flatMap((g) => g.projects.map((x) => x.project.name));
+  const MIXED = [p('Delta', { workspace: 'Ops', worktrees: [{ name: 'Feature-X', branch: 'Release/Two' }] }), p('alpha')];
+
+  it('mixed-case data is found by lower-case terms, on name and workspace', () => {
+    expect(names('delta', MIXED)).toEqual(['Delta']);
+    expect(names('ops', MIXED)).toEqual(['Delta']);
+  });
+  it('a mid-string query matches a name, a workspace and a worktree name or branch', () => {
+    expect(names('lph', MIXED)).toEqual(['alpha']);
+    expect(names('el', MIXED)).toEqual(['Delta']);
+    expect(groupRoots(MIXED, 'ps')[0].projects[0].worktreeHit).toBe(false);
+    expect(names('ps', MIXED)).toEqual(['Delta']);
+    expect(groupRoots(MIXED, 'ature-')[0].projects[0].worktreeHit).toBe(true);
+    expect(groupRoots(MIXED, 'lease/tw')[0].projects[0].worktreeHit).toBe(true);
+  });
+});
+
 describe('groupRoots', () => {
   it('orders groups alphabetically with "No workspace" last, and projects alphabetically within', () => {
     const g = groupRoots(PROJECTS, '');

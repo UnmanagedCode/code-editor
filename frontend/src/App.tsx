@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefusalAlert } from '@/components/RefusalAlert';
 import { RootBrowser, RootPicker, rootLabel, type RootChoice } from '@/components/RootPicker';
 import { SwitchRootDialog } from '@/components/SwitchRootDialog';
 import { Workspace, type WorkspaceHandle } from '@/components/Workspace';
