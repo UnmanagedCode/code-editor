@@ -55,6 +55,13 @@ export function makeTree(t, { symlinks = false, git: useGit = true } = {}) {
     git(root, 'commit', '-q', '-m', 'init');
   }
   if (symlinks) {
+    // A nested repository (a vendored checkout): its .git must be as off-limits as the root's.
+    write(root, 'vendor/foo/.git/config', '[core]\n\trepositoryformatversion = 0\n');
+    write(root, 'vendor/foo/.git/HEAD', 'ref: refs/heads/main\n');
+    write(root, 'vendor/foo/.git/hooks/pre-commit', '#!/bin/sh\n');
+    write(root, 'vendor/foo/lib.c', 'int x;\n');
+    fs.symlinkSync('vendor/foo/.git', path.join(root, 'leak'));
+    fs.symlinkSync('vendor/foo', path.join(root, 'leakdir'));
     fs.symlinkSync(outsideDir, path.join(root, 'out'));
     fs.symlinkSync(outsideFile, path.join(root, 'outfile'));
     if (useGit) fs.symlinkSync('.git', path.join(root, 'gitlink'));

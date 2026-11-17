@@ -17,7 +17,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (path.startsWith('/')) throw new Error(`api('${path}'): root-relative, so it would reach cc, not this plugin`);
   let res: Response;
   try {
-    res = await fetch(path, init);
+    res = await fetch(path, { ...init, headers: { ...(init?.headers as Record<string, string> | undefined), 'x-code-editor': '1' } });
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     throw new ApiError(0, `unreachable: ${e instanceof Error ? e.message : String(e)}`);

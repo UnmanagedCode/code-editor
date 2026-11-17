@@ -37,7 +37,7 @@ test('every kind of response carries the CSP: API 200, 404, error, bad JSON, unb
   hasSecurityHeaders(await fetch(`${app.base}/api/nope`));
   hasSecurityHeaders(await fetch(`${app.base}/`)); // unbuilt: 503
   hasSecurityHeaders(await fetch(`${app.base}/api/list?path=`)); // 400
-  const bad = await fetch(`${app.base}/api/rename`, { method: 'POST', headers: { 'content-type': 'application/json', origin: app.base }, body: '{bad' });
+  const bad = await fetch(`${app.base}/api/rename`, { method: 'POST', headers: { 'content-type': 'application/json', origin: app.base, 'x-code-editor': '1' }, body: '{bad' });
   assert.equal(bad.status, 400);
   hasSecurityHeaders(bad);
   hasSecurityHeaders(await fetch(`${app.base}/api/rename`, { method: 'POST', body: 'x' })); // 415/403
@@ -68,28 +68,28 @@ test('an unbuilt UI answers / with a plain-text 503 and other assets 404; the AP
 test('state-changing requests need a JSON content type (415) and a matching Origin (403)', async (t) => {
   const app = await setup(t);
   const body = JSON.stringify({ project: 'p', path: 'x', type: 'file' });
-  const noType = await app.raw('POST', '/api/entries', { headers: { origin: app.base }, body });
+  const noType = await app.raw('POST', '/api/entries', { headers: { 'x-code-editor': '1', origin: app.base }, body });
   assert.equal(noType.status, 415);
   assert.equal(noType.body.code, 'UNSUPPORTED_MEDIA_TYPE');
-  const form = await app.raw('POST', '/api/entries', { headers: { origin: app.base, 'content-type': 'text/plain' }, body });
+  const form = await app.raw('POST', '/api/entries', { headers: { 'x-code-editor': '1', origin: app.base, 'content-type': 'text/plain' }, body });
   assert.equal(form.status, 415);
-  const noOrigin = await app.raw('POST', '/api/entries', { headers: { 'content-type': 'application/json' }, body });
+  const noOrigin = await app.raw('POST', '/api/entries', { headers: { 'x-code-editor': '1', 'content-type': 'application/json' }, body });
   assert.equal(noOrigin.status, 403);
   assert.equal(noOrigin.body.code, 'REQUEST_REFUSED');
-  const foreign = await app.raw('POST', '/api/entries', { headers: { 'content-type': 'application/json', origin: 'https://evil.example' }, body });
+  const foreign = await app.raw('POST', '/api/entries', { headers: { 'x-code-editor': '1', 'content-type': 'application/json', origin: 'https://evil.example' }, body });
   assert.equal(foreign.status, 403);
-  const ok = await app.raw('POST', '/api/entries', { headers: { 'content-type': 'application/json; charset=utf-8', origin: app.base }, body });
+  const ok = await app.raw('POST', '/api/entries', { headers: { 'x-code-editor': '1', 'content-type': 'application/json; charset=utf-8', origin: app.base }, body });
   assert.equal(ok.status, 201);
 });
 
 test('a GET may omit Origin, but one it carries must match Host', async (t) => {
   const app = await setup(t);
-  assert.equal((await app.raw('GET', '/api/roots')).status, 200);
-  assert.equal((await app.raw('GET', '/api/roots', { headers: { origin: app.base } })).status, 200);
-  const foreign = await app.raw('GET', '/api/roots', { headers: { origin: 'http://evil.example' } });
+  assert.equal((await app.get('/api/roots')).status, 200);
+  assert.equal((await app.raw('GET', '/api/roots', { headers: { 'x-code-editor': '1', origin: app.base } })).status, 200);
+  const foreign = await app.raw('GET', '/api/roots', { headers: { 'x-code-editor': '1', origin: 'http://evil.example' } });
   assert.equal(foreign.status, 403);
   assert.equal(foreign.body.code, 'REQUEST_REFUSED');
-  assert.equal((await app.raw('GET', '/api/roots', { headers: { origin: 'null' } })).status, 403);
+  assert.equal((await app.raw('GET', '/api/roots', { headers: { 'x-code-editor': '1', origin: 'null' } })).status, 403);
 });
 
 test('a proxied request (Host and Origin naming cc’s origin) passes; a Host naming this backend’s own port by a non-loopback name is refused', async (t) => {
@@ -97,7 +97,7 @@ test('a proxied request (Host and Origin naming cc’s origin) passes; a Host na
   const port = new URL(app.base).port;
   // Raw sockets: fetch forbids setting Host.
   const send = (host, origin) => new Promise((resolve) => {
-    const s = net.connect(Number(port), '127.0.0.1', () => s.write(`GET /api/roots HTTP/1.1\r\nHost: ${host}\r\n${origin ? `Origin: ${origin}\r\n` : ''}Connection: close\r\n\r\n`));
+    const s = net.connect(Number(port), '127.0.0.1', () => s.write(`GET /api/roots HTTP/1.1\r\nHost: ${host}\r\nX-Code-Editor: 1\r\n${origin ? `Origin: ${origin}\r\n` : ''}Connection: close\r\n\r\n`));
     let data = '';
     s.on('data', (d) => { data += d; });
     s.on('close', () => resolve(Number(data.split(' ')[1])));
@@ -110,10 +110,10 @@ test('a proxied request (Host and Origin naming cc’s origin) passes; a Host na
 
 test('malformed and over-large JSON bodies never echo internals', async (t) => {
   const app = await setup(t, { limits: { SMALL_BODY_LIMIT: 100 } });
-  const big = await app.raw('POST', '/api/delete', { headers: { 'content-type': 'application/json', origin: app.base }, body: JSON.stringify({ project: 'p', path: 'a'.repeat(500) }) });
+  const big = await app.raw('POST', '/api/delete', { headers: { 'x-code-editor': '1', 'content-type': 'application/json', origin: app.base }, body: JSON.stringify({ project: 'p', path: 'a'.repeat(500) }) });
   assert.equal(big.status, 413);
   assert.equal(big.body.code, 'TOO_LARGE');
-  const bad = await app.raw('POST', '/api/delete', { headers: { 'content-type': 'application/json', origin: app.base }, body: '{"a":' });
+  const bad = await app.raw('POST', '/api/delete', { headers: { 'x-code-editor': '1', 'content-type': 'application/json', origin: app.base }, body: '{"a":' });
   assert.equal(bad.status, 400);
   assert.doesNotMatch(JSON.stringify(bad.body), /Unexpected|position|JSON\.parse/);
 });
@@ -160,4 +160,26 @@ test('static: a symlink inside dist that leads out of it is not served', async (
   fs.symlinkSync(path.join(outside, 'x.js'), path.join(dist, 'leak.js'));
   const app = await setup(t, { distDir: dist });
   assert.equal((await fetch(`${app.base}/leak.js`)).status, 404);
+});
+
+test('every /api request except health must carry the X-Code-Editor header (a cross-site <img> GET cannot), else 403 REQUEST_REFUSED', async (t) => {
+  const app = await setup(t);
+  assert.equal((await fetch(`${app.base}/api/health`)).status, 200, 'health is exempt');
+  for (const url of ['/api/roots', `/api/file?${app.q({ project: 'p', path: 'a.txt' })}`, `/api/list?${app.q({ project: 'p', path: '' })}`]) {
+    const bare = await fetch(app.base + url);
+    assert.equal(bare.status, 403, url);
+    assert.equal((await bare.json()).code, 'REQUEST_REFUSED');
+    assert.equal((await fetch(app.base + url, { headers: { 'x-code-editor': '1' } })).status, 200, url);
+  }
+  const wrong = await fetch(`${app.base}/api/roots`, { headers: { 'x-code-editor': '0' } });
+  assert.equal(wrong.status, 403, 'only the exact value passes');
+});
+
+test('the custom header is required on state-changing requests too, even with a matching Origin and JSON type', async (t) => {
+  const app = await setup(t);
+  const body = JSON.stringify({ project: 'p', path: 'x', type: 'file' });
+  const r = await fetch(`${app.base}/api/entries`, { method: 'POST', headers: { 'content-type': 'application/json', origin: app.base }, body });
+  assert.equal(r.status, 403);
+  const ok = await fetch(`${app.base}/api/entries`, { method: 'POST', headers: { 'content-type': 'application/json', origin: app.base, 'x-code-editor': '1' }, body });
+  assert.equal(ok.status, 201);
 });

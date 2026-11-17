@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -91,4 +92,86 @@ test('a search pattern that looks like an option is searched for, not parsed', (
   const r = run(root, 'search', ['fixed', 'sensitive', '10', '100', '--version']);
   assert.equal(r.code, 0);
   assert.match(r.out.toString(), /o\.txt/);
+});
+
+test('the helper refuses any .git component of a resolved path, however nested or cased (target layer, bypassing the backend)', (t) => {
+  const { root } = makeTree(t, { symlinks: true });
+  fs.mkdirSync(path.join(root, 'vendor/foo/.GIT'));
+  fs.writeFileSync(path.join(root, 'vendor/foo/.GIT/config'), 'x');
+  for (const p of ['./vendor/foo/.git/config', './leak/config', './leakdir/.git/config', './vendor/foo/.GIT/config']) {
+    assert.equal(run(root, 'read', [p, '10']).code, 71, p);
+  }
+  assert.equal(run(root, 'list', ['./leak', '10']).code, 71);
+  assert.equal(run(root, 'write', ['./leak/config', 'a'.repeat(64)], 'x').code, 71);
+  assert.equal(run(root, 'create', ['./leak/x']).code, 71);
+  assert.equal(run(root, 'mkdir', ['./leakdir/.git/d']).code, 71);
+  assert.equal(run(root, 'rename', ['./notes.txt', './leak/x']).code, 71);
+  assert.equal(run(root, 'rename', ['./leak/config', './stolen']).code, 71);
+  assert.equal(run(root, 'delete', ['./leak/config']).code, 71);
+  assert.equal(run(root, 'create', ['./.Git']).code, 71, 'a .Git leaf');
+  assert.equal(run(root, 'delete', ['./.GIT']).code, 71);
+});
+
+test('list does not show a .git entry of any case', (t) => {
+  const d = mkTmp(t);
+  for (const n of ['.git', '.GIT', '.Git', 'keep']) fs.mkdirSync(path.join(d, n));
+  const names = run(d, 'list', ['.', '10']).out.toString().split('\0').filter((_, i) => i % 2 === 1);
+  assert.deepEqual(names, ['keep']);
+});
+
+// S2: the hash check runs against what is on disk at the moment of the rename, after the new content is staged.
+// Each test holds stdin open (the helper blocks in its copy), changes the file behind it, then releases stdin.
+async function raceWrite(cwd, args, mutate) {
+  const child = spawn('sh', ['-c', OPS_SCRIPT, 'code-editor', 'write', ...args], { cwd, env: { ...process.env, LC_ALL: 'C' }, stdio: ['pipe', 'pipe', 'pipe'] });
+  const out = [];
+  child.stdout.on('data', (d) => out.push(d));
+  const done = new Promise((resolve) => child.on('close', (code) => resolve({ code, out: Buffer.concat(out).toString() })));
+  const deadline = Date.now() + 10_000;
+  while (!fs.readdirSync(cwd).some((n) => n.startsWith('.code-editor-'))) {
+    if (Date.now() > deadline) throw new Error('the helper never staged a temp file');
+    await new Promise((r) => setImmediate(r));
+  }
+  mutate();
+  child.stdin.end('staged content');
+  return done;
+}
+
+test('write: a file MODIFIED while the new content is being staged is a conflict, and the other writer’s content survives', async (t) => {
+  const d = mkTmp(t);
+  fs.writeFileSync(path.join(d, 'f'), 'orig');
+  const hash = createHash('sha256').update('orig').digest('hex');
+  const r = await raceWrite(d, ['./f', hash], () => fs.writeFileSync(path.join(d, 'f'), 'other writer'));
+  assert.equal(r.code, 68);
+  assert.equal(r.out, createHash('sha256').update('other writer').digest('hex'), 'the current hash is reported');
+  assert.equal(fs.readFileSync(path.join(d, 'f'), 'utf8'), 'other writer');
+  assert.deepEqual(fs.readdirSync(d), ['f'], 'the temp file is removed');
+});
+
+test('write: a file CREATED while the new content is being staged (expected "must not exist") is a conflict, not clobbered', async (t) => {
+  const d = mkTmp(t);
+  const r = await raceWrite(d, ['./new', '-'], () => fs.writeFileSync(path.join(d, 'new'), 'created concurrently'));
+  assert.equal(r.code, 68);
+  assert.equal(r.out, createHash('sha256').update('created concurrently').digest('hex'));
+  assert.equal(fs.readFileSync(path.join(d, 'new'), 'utf8'), 'created concurrently');
+  assert.deepEqual(fs.readdirSync(d), ['new']);
+});
+
+test('write: a file DELETED while staging, with a hash expected, is a conflict reporting "-" and nothing is created', async (t) => {
+  const d = mkTmp(t);
+  fs.writeFileSync(path.join(d, 'f'), 'orig');
+  const hash = createHash('sha256').update('orig').digest('hex');
+  const r = await raceWrite(d, ['./f', hash], () => fs.rmSync(path.join(d, 'f')));
+  assert.equal(r.code, 68);
+  assert.equal(r.out, '-');
+  assert.deepEqual(fs.readdirSync(d), []);
+});
+
+test('write: with no concurrent change the staged content lands (the reordering did not break the happy paths)', async (t) => {
+  const d = mkTmp(t);
+  fs.writeFileSync(path.join(d, 'f'), 'orig');
+  const hash = createHash('sha256').update('orig').digest('hex');
+  assert.equal((await raceWrite(d, ['./f', hash], () => {})).code, 0);
+  assert.equal(fs.readFileSync(path.join(d, 'f'), 'utf8'), 'staged content');
+  assert.equal((await raceWrite(d, ['./g', '-'], () => {})).code, 0);
+  assert.equal(fs.readFileSync(path.join(d, 'g'), 'utf8'), 'staged content');
 });

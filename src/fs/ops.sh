@@ -22,14 +22,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 0 = inside the root and not .git; 1 = outside the root; 2 = .git or beneath it.
+# 0 = inside the root with no .git component; 1 = outside the root; 2 = .git (the root's or a nested repository's).
+# Every component of the RESOLVED path is checked, in any letter case (case-insensitive file systems), and each ancestor is also
+# compared by identity with the root's .git.
 allowed() {
   case $1 in
     "$ROOT") return 0 ;;
-    "$ROOT"/.git | "$ROOT"/.git/*) return 2 ;;
-    "$ROOT"/*) return 0 ;;
+    "$ROOT"/*) ;;
     *) return 1 ;;
   esac
+  case /${1#"$ROOT"/}/ in */[.][gG][iI][tT]/*) return 2 ;; esac
+  _p=$1
+  while [ "$_p" != "$ROOT" ] && [ -n "$_p" ]; do
+    if [ "$_p" -ef "$ROOT/.git" ]; then return 2; fi
+    _p=${_p%/*}
+  done
+  return 0
 }
 
 check_allowed() {
@@ -55,7 +63,7 @@ resolve_parent() {
     *) _parent=. ;;
   esac
   LEAF=${1##*/}
-  case $LEAF in '' | . | .. | .git) exit "$E_REFUSED" ;; esac
+  case $LEAF in '' | . | .. | [.][gG][iI][tT]) exit "$E_REFUSED" ;; esac
   [ -e "$_parent" ] || exit "$E_NOTFOUND"
   PDIR=$(realpath -e -- "$_parent" 2>/dev/null) || exit "$E_NOTFOUND"
   check_allowed "$PDIR"
@@ -78,7 +86,7 @@ case $op in
     for e in "$REAL"/* "$REAL"/.[!.]* "$REAL"/..?*; do
       exists "$e" || continue
       name=${e##*/}
-      [ "$name" != .git ] || continue
+      case $name in [.][gG][iI][tT]) continue ;; esac
       n=$((n + 1))
       if [ "$n" -gt "$max" ]; then
         printf '/truncated\0'
@@ -137,28 +145,44 @@ case $op in
       resolve "$1"
       [ -f "$REAL" ] || exit "$E_NOTFILE"
       PDIR=${REAL%/*}
-      current=$(sha256sum < "$REAL" | cut -d' ' -f1)
       have=1
+      [ -w "$REAL" ] || exit "$E_DENIED"
     else
       resolve_parent "$1"
       REAL=$PDIR/$LEAF
-      current=-
       have=0
     fi
-    if [ "$have" = 1 ]; then [ -w "$REAL" ] || exit "$E_DENIED"; fi
     [ -w "$PDIR" ] || exit "$E_DENIED"
+    # Stage first (the slow part: it copies stdin), then compare and rename back to back, so the window in which another
+    # writer can slip in is only the gap between the hash and the rename.
+    FILE_TMP=$(mktemp "$PDIR/.code-editor-XXXXXX") || exit "$E_DENIED"
+    cat > "$FILE_TMP" || exit 64
+    if [ "$have" = 1 ]; then
+      # A file deleted while staging is reported as a conflict below, so a missing reference is not an error here.
+      if [ -e "$REAL" ]; then chmod --reference="$REAL" -- "$FILE_TMP" || exit 64; fi
+    else
+      chmod "$(printf '%03o' $((0666 & ~$(umask))))" -- "$FILE_TMP" || exit 64
+    fi
+    if exists "$REAL"; then
+      if [ -f "$REAL" ] && [ ! -L "$REAL" ]; then current=$(sha256sum < "$REAL" | cut -d' ' -f1); else current=-; fi
+    else
+      current=-
+    fi
     if [ "$current" != "$expected" ]; then
       printf '%s' "$current"
       exit "$E_CONFLICT"
     fi
-    FILE_TMP=$(mktemp "$PDIR/.code-editor-XXXXXX") || exit "$E_DENIED"
-    cat > "$FILE_TMP" || exit 64
     if [ "$have" = 1 ]; then
-      chmod --reference="$REAL" -- "$FILE_TMP" || exit 64
+      mv -f -- "$FILE_TMP" "$REAL" || exit 64
     else
-      chmod "$(printf '%03o' $((0666 & ~$(umask))))" -- "$FILE_TMP" || exit 64
+      # "Must not exist": a no-clobber rename. If the temp file is still here, the file appeared in the meantime.
+      mv -n -T -- "$FILE_TMP" "$REAL" 2> /dev/null
+      if [ -e "$FILE_TMP" ]; then
+        if [ -f "$REAL" ] && [ ! -L "$REAL" ]; then current=$(sha256sum < "$REAL" | cut -d' ' -f1); else current=-; fi
+        printf '%s' "$current"
+        exit "$E_CONFLICT"
+      fi
     fi
-    mv -f -- "$FILE_TMP" "$REAL" || exit 64
     FILE_TMP=
     ;;
 
@@ -247,8 +271,16 @@ case $op in
       echo rg
       rg --no-config --files --hidden -g '!.git' --null . 2> /dev/null | head -z -n $((max + 1))
     elif command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+      # rg skips every file an ignore rule matches, tracked or not. git lists tracked ones regardless, so the tracked files
+      # that match a rule are appended after a /ignored marker for the backend to subtract (as many extra lines are
+      # requested as there are such files, so the cap still holds after the subtraction).
+      TMP=$(mktemp -d) || exit 64
+      git ls-files -z --cached --ignored --exclude-standard > "$TMP/ignored" 2> /dev/null
+      n=$(tr -cd '\0' < "$TMP/ignored" | wc -c)
       echo git
-      git ls-files -z --cached --others --exclude-standard 2> /dev/null | head -z -n $((max + 1))
+      git ls-files -z --cached --others --exclude-standard 2> /dev/null | head -z -n $((max + 1 + n))
+      printf '/ignored\0'
+      cat "$TMP/ignored"
     else
       exit "$E_NOSEARCH"
     fi

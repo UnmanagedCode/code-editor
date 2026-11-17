@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -61,6 +62,15 @@ for (const engine of ['rg', 'git']) {
     const { search } = await setup(t, engine, { files: { 'dash.txt': 'a -needle- b\n', 'opt.txt': '--files\n' } });
     assert.deepEqual((await search('-needle-')).body.files.map((f) => f.path), ['dash.txt']);
     assert.deepEqual((await search('--files')).body.files.map((f) => f.path), ['opt.txt']);
+  });
+
+  test(label('a file whose NAME contains a newline is reported under its exact name, and its neighbours are intact'), { skip }, async (t) => {
+    const { search } = await setup(t, engine, { files: { 'we\nird.txt': 'needle in a weird name\nsecond needle\n' } });
+    const r = await search('needle');
+    const weird = r.body.files.find((f) => f.path === 'we\nird.txt');
+    assert.deepEqual(weird.matches, [{ line: 1, text: 'needle in a weird name' }, { line: 2, text: 'second needle' }]);
+    assert.deepEqual(r.body.files.map((f) => f.path).sort(), ['notes.txt', 'src/lib/util.ts', 'src/main.ts', 'we\nird.txt']);
+    assert.equal(r.body.total, 5);
   });
 
   test(label('results stop at MAX_SEARCH_RESULTS and say truncated'), { skip }, async (t) => {
@@ -148,9 +158,40 @@ test('a search whose client disconnects is aborted toward cc (cancel = disconnec
   const arrived = app.fake.nextExec();
   const gone = app.fake.nextDisconnect();
   const ctl = new AbortController();
-  const p = fetch(`${app.base}/api/search?${app.q({ project: 'app', q: 'x' })}`, { signal: ctl.signal }).catch(() => {});
+  const p = fetch(`${app.base}/api/search?${app.q({ project: 'app', q: 'x' })}`, { signal: ctl.signal, headers: { 'x-code-editor': '1' } }).catch(() => {});
   await arrived;
   ctl.abort();
   await gone;
   await p;
+});
+
+test('[git] quick-open excludes tracked files that match an ignore rule, like rg does', async (t) => {
+  const { listFiles, root } = await setup(t, 'git');
+  fs.writeFileSync(path.join(root, 'build/forced.js'), 'x');
+  execFileSync('git', ['add', '-f', 'build/forced.js'], { cwd: root });
+  const files = (await listFiles()).body.files;
+  assert.ok(!files.includes('tracked.log'), 'tracked.log is tracked but matches *.log');
+  assert.ok(!files.includes('build/forced.js'), 'force-added under an ignored directory');
+  assert.ok(files.includes('src/main.ts') && files.includes('.gitignore'));
+});
+
+test('the git and rg engines list exactly the same files', { skip: rgSkip }, async (t) => {
+  const tree = makeTree(t);
+  fs.writeFileSync(path.join(tree.root, 'build/forced.js'), 'x');
+  execFileSync('git', ['add', '-f', 'build/forced.js'], { cwd: tree.root });
+  fs.writeFileSync(path.join(tree.root, 'untracked.txt'), 'u');
+  const app = await startApp(t, { projects: { viaRg: { dir: tree.root }, viaGit: { dir: tree.root, hideTools: ['rg'] } } });
+  const list = async (project) => (await app.get(`/api/files?${app.q({ project })}`)).body;
+  const [rg, git] = [await list('viaRg'), await list('viaGit')];
+  assert.equal(rg.engine, 'rg');
+  assert.equal(git.engine, 'git');
+  assert.deepEqual([...git.files].sort(), [...rg.files].sort());
+});
+
+test('[git] a truncated quick-open list still caps at MAX_QUICKOPEN_FILES when ignored-but-tracked files are filtered out', async (t) => {
+  const { listFiles } = await setup(t, 'git', { limits: { MAX_QUICKOPEN_FILES: 3 } });
+  const r = await listFiles();
+  assert.equal(r.body.files.length, 3);
+  assert.equal(r.body.truncated, true);
+  assert.ok(!r.body.files.includes('tracked.log'));
 });

@@ -20,16 +20,10 @@ export function normalizeRel(value, { allowRoot = false, maxLength = MAX_PATH_LE
   for (const seg of value.split('/')) {
     if (seg === '') throw bad('empty segment');
     if (seg === '.' || seg === '..') throw bad(`'${seg}' segment`);
-    if (seg === '.git') throw bad("'.git' segment");
+    if (seg.toLowerCase() === '.git') throw bad("'.git' segment"); // any case: case-insensitive file systems
   }
   return value;
 }
-
-/** The parent of a normalized path ('' for a top-level entry). */
-export const parentRel = (rel) => (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '');
-
-/** The last segment of a normalized path. */
-export const leafName = (rel) => rel.slice(rel.lastIndexOf('/') + 1);
 
 /** True when `child` is `ancestor` or lies beneath it. The root ('') contains everything. */
 export const isUnder = (child, ancestor) => ancestor === '' || child === ancestor || child.startsWith(`${ancestor}/`);

@@ -20,10 +20,13 @@ export const SMALL_BODY_LIMIT = 64 * 1024;
 /** The stdin of a save as cc receives it: base64 of at most MAX_EDIT_BYTES. */
 export const maxWriteStdinB64 = (cap = MAX_EDIT_BYTES) => Math.ceil(cap / 3) * 4;
 
-/** cc stdout cap for a read: the size line, plus the file bytes in base64. */
+// cc fences `maxOutputBytes` on the raw bytes the command writes. The output caps below are sized as if those bytes were
+// base64 (4/3 larger), which is more than needed: a deliberately conservative bound, never too small.
+
+/** `maxOutputBytes` for a read: the size line plus at most `cap` file bytes. */
 export const readOutputBytes = (cap = MAX_EDIT_BYTES) => Math.ceil((cap + 64) / 3) * 4 + 1024;
 
-/** cc stdout cap for a search: each result line is bounded by the snippet cap plus its path and line number. */
+/** `maxOutputBytes` for a search: each result line is bounded by the snippet cap plus its path and line number. */
 export const searchOutputBytes = (max = MAX_SEARCH_RESULTS, snip = MAX_SNIPPET_BYTES) => Math.ceil(((max + 1) * (snip + MAX_PATH_LENGTH + 32) + 64) / 3) * 4 + 1024;
 export const filesOutputBytes = (max = MAX_QUICKOPEN_FILES) => Math.ceil(((max + 1) * (MAX_PATH_LENGTH + 1) + 64) / 3) * 4 + 1024;
 export const listOutputBytes = (max = MAX_DIR_ENTRIES) => Math.ceil(((max + 1) * (MAX_PATH_LENGTH + 8) * 2 + 64) / 3) * 4 + 1024;

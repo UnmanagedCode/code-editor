@@ -49,8 +49,13 @@ export function requestRefusal(headers, listenPort, { requireOrigin }) {
 
 const SAFE = new Set(['GET', 'HEAD']);
 
-/** The Origin↔Host gate for every /api request. */
+/** The custom header every /api request carries: a cross-site <img> or form cannot set it without a CORS preflight, which this backend never grants. */
+export const CSRF_HEADER = 'x-code-editor';
+
+
+/** The custom-header and Origin↔Host gates for every /api request. */
 export function requestGuard(req, _res, next) {
+  if (req.get(CSRF_HEADER) !== '1') return next(new Refusal('REQUEST_REFUSED', `request refused: missing ${CSRF_HEADER} header`));
   const why = requestRefusal(req.headers, req.socket.localPort, { requireOrigin: !SAFE.has(req.method) });
   if (why) return next(new Refusal('REQUEST_REFUSED', `request refused: ${why}`));
   next();

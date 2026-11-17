@@ -28,10 +28,10 @@ export async function startApp(t, { projects = {}, limits, distDir } = {}) {
     return { status: res.status, headers: res.headers, body: parsed };
   };
   const json = (method) => (p, body) => raw(method, p, {
-    headers: { 'content-type': 'application/json', origin: base },
+    headers: { 'content-type': 'application/json', origin: base, 'x-code-editor': '1' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const get = (p) => raw('GET', p, {});
+  const get = (p) => raw('GET', p, { headers: { 'x-code-editor': '1' } });
   const q = (obj) => new URLSearchParams(Object.entries(obj).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString();
   return { base, fake, server, distDir: dist, raw, get, put: json('PUT'), post: json('POST'), q };
 }

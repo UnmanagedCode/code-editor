@@ -9,12 +9,16 @@ const built = fs.existsSync(path.join(dist, 'index.html'));
 const skip = !built && 'frontend/dist is not built (npm run prepare)';
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
 
-test('index.html: only the two host URLs are root-relative, the bridge comes first, nothing inline', { skip }, () => {
+test('index.html: only the two host URLs are root-relative, the bridge, theme and module come in that order, nothing inline', { skip }, () => {
   const html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
   const urls = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(urls.filter((u) => u.startsWith('/')).sort(), ['/pluginBridge.js', '/pluginTheme.css']);
   assert.ok(urls.filter((u) => !u.startsWith('/')).every((u) => u.startsWith('./') || u === 'theme-init.js' || !u.includes(':')), urls.join(' '));
-  assert.ok(html.indexOf('/pluginBridge.js') < html.indexOf('<script', html.indexOf('/pluginBridge.js') + 10));
+  const at = (needle) => html.indexOf(needle);
+  const order = [at('src="/pluginBridge.js"'), at('href="/pluginTheme.css"'), at('type="module"')];
+  assert.ok(order.every((i) => i >= 0), `all three present: ${order}`);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'the bridge, then the theme, then the module entry');
+  assert.equal(at('<script'), at('src="/pluginBridge.js"') - '<script '.length, 'the bridge is the first script in the document');
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/, 'no inline script');
   assert.doesNotMatch(html, /<style/, 'no inline style element');
   assert.doesNotMatch(html, /\sstyle=/, 'no style attribute');

@@ -20,19 +20,27 @@ function snippet(buf, max) {
 
 const stripDot = (p) => (p.startsWith('./') ? p.slice(2) : p);
 
-function parseLine(engine, line) {
-  const z = line.indexOf(0);
-  if (z < 0) return null;
-  const path = stripDot(decodeName(line.subarray(0, z)).text);
-  const rest = line.subarray(z + 1);
-  if (engine === 'rg') {
-    const c = rest.indexOf(0x3a);
-    if (c < 0) return null;
-    return { path, line: Number(rest.subarray(0, c).toString('latin1')), text: rest.subarray(c + 1) };
+/**
+ * Parses the engine's records: `path NUL line : text NL` (rg --null) or `path NUL line NUL text NL` (git grep -z).
+ * The path is NUL-terminated, so a newline inside a file name cannot be mistaken for a record boundary; only the text,
+ * which cannot contain a newline, ends at one. `lines` counts raw newlines, which is what the helper's cap counted.
+ */
+function parseRecords(engine, body) {
+  const records = [];
+  let lines = 0;
+  for (const b of body) if (b === 0x0a) lines++;
+  for (let i = 0; i < body.length;) {
+    const z = body.indexOf(0, i);
+    if (z < 0) break;
+    const path = stripDot(decodeName(body.subarray(i, z)).text);
+    let nl = body.indexOf(0x0a, z + 1);
+    if (nl < 0) nl = body.length;
+    const rest = body.subarray(z + 1, nl);
+    const sep = rest.indexOf(engine === 'rg' ? 0x3a : 0);
+    if (sep >= 0) records.push({ path, line: Number(rest.subarray(0, sep).toString('latin1')), text: rest.subarray(sep + 1) });
+    i = nl + 1;
   }
-  const z2 = rest.indexOf(0);
-  if (z2 < 0) return null;
-  return { path, line: Number(rest.subarray(0, z2).toString('latin1')), text: rest.subarray(z2 + 1) };
+  return { records, lines };
 }
 
 /** Searches the tree: matching lines grouped by file, capped at MAX_SEARCH_RESULTS. */
@@ -49,19 +57,12 @@ export async function search(target, { q, regex, matchCase }, { limits, signal }
     throw e;
   }
   const { engine, body } = engineAndBody(stdout);
-  const lines = [];
-  let start = 0;
-  for (let i = 0; i < body.length; i++) {
-    if (body[i] === 0x0a) { lines.push(body.subarray(start, i)); start = i + 1; }
-  }
-  if (start < body.length) lines.push(body.subarray(start));
-  const truncated = lines.length > max;
+  const { records, lines } = parseRecords(engine, body);
+  const truncated = lines > max || records.length > max;
   const files = [];
   const byPath = new Map();
   let total = 0;
-  for (const l of lines.slice(0, max)) {
-    const m = parseLine(engine, l);
-    if (!m) continue;
+  for (const m of records.slice(0, max)) {
     let f = byPath.get(m.path);
     if (!f) { f = { path: m.path, matches: [] }; byPath.set(m.path, f); files.push(f); }
     f.matches.push({ line: m.line, text: snippet(m.text, snip) });
@@ -77,6 +78,11 @@ export async function listFiles(target, { limits, signal }) {
     timeoutMs: limits.SEARCH_TIMEOUT_MS, maxOutputBytes: filesOutputBytes(max), signal, retry: true,
   });
   const { engine, body } = engineAndBody(stdout);
-  const all = splitNul(body).map((b) => stripDot(decodeName(b).text));
+  const parts = splitNul(body).map((b) => stripDot(decodeName(b).text));
+  const marker = parts.indexOf('/ignored');
+  const listed = marker < 0 ? parts : parts.slice(0, marker);
+  // The git engine appends the tracked files an ignore rule matches (rg never lists them); subtract them.
+  const ignored = new Set(marker < 0 ? [] : parts.slice(marker + 1));
+  const all = ignored.size ? listed.filter((p) => !ignored.has(p)) : listed;
   return { engine, files: all.slice(0, max), truncated: all.length > max, limit: max };
 }

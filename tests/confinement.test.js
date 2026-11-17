@@ -134,3 +134,60 @@ test('the root, .git, "..", absolute and doubled-slash paths are refused 400 bef
   }
   assert.equal(app.fake.state.execCalls.length, before, 'refused input never reaches cc');
 });
+
+const NESTED = ['config', 'HEAD', 'hooks/pre-commit'];
+const snapshotNested = (root) => Object.fromEntries(NESTED.map((n) => [n, fs.readFileSync(path.join(root, 'vendor/foo/.git', n), 'utf8')]));
+
+test('a symlink to a NESTED .git is PATH_REFUSED for read, write, list, create, rename and delete; nothing under it changes', async (t) => {
+  const { list, read, save, create, rename, del, root } = await setup(t);
+  const before = snapshotNested(root);
+  refusedWith(await read('leak/config'), 403, 'PATH_REFUSED');
+  refusedWith(await read('leak/hooks/pre-commit'), 403, 'PATH_REFUSED');
+  refusedWith(await list('leak'), 403, 'PATH_REFUSED');
+  refusedWith(await list('leak/hooks'), 403, 'PATH_REFUSED');
+  refusedWith(await save('leak/config', 'evil', 'a'.repeat(64)), 403, 'PATH_REFUSED');
+  refusedWith(await save('leak/hooks/post-commit', 'evil', null), 403, 'PATH_REFUSED');
+  refusedWith(await create('leak/x', 'file'), 403, 'PATH_REFUSED');
+  refusedWith(await create('leak/d', 'dir'), 403, 'PATH_REFUSED');
+  refusedWith(await rename('notes.txt', 'leak/x'), 403, 'PATH_REFUSED');
+  refusedWith(await rename('leak/config', 'stolen'), 403, 'PATH_REFUSED');
+  refusedWith(await del('leak/config'), 403, 'PATH_REFUSED');
+  refusedWith(await del('leak/hooks'), 403, 'PATH_REFUSED');
+  assert.deepEqual(snapshotNested(root), before);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'vendor/foo/.git')).sort(), ['HEAD', 'config', 'hooks']);
+  assert.ok(!fs.existsSync(path.join(root, 'stolen')));
+});
+
+test('the link itself can still be listed as outside and removed (acting on the link, not the nested .git)', async (t) => {
+  const { list, del, root } = await setup(t);
+  const by = Object.fromEntries((await list('')).body.entries.map((e) => [e.name, e]));
+  assert.equal(by.leak.target, 'outside', 'a link into a nested .git is never offered');
+  assert.equal(by.leakdir.target, 'dir', 'a link to the directory holding it is an ordinary folder');
+  assert.equal((await del('leak')).status, 200);
+  assert.ok(fs.existsSync(path.join(root, 'vendor/foo/.git/config')));
+});
+
+test('a nested .git named in the request is refused 400 before any exec call, for every operation', async (t) => {
+  const { list, read, save, create, rename, del, app } = await setup(t);
+  const before = app.fake.state.execCalls.length;
+  const p = 'vendor/foo/.git/config';
+  for (const r of [await read(p), await list('vendor/foo/.git'), await save(p, 'x', null), await create('vendor/foo/.git/x', 'file'),
+    await rename(p, 'x'), await rename('notes.txt', 'vendor/foo/.git/x'), await del(p), await del('vendor/foo/.git')]) {
+    assert.equal(r.status, 400);
+    assert.equal(r.body.code, 'INVALID_ARGUMENT');
+  }
+  assert.equal(app.fake.state.execCalls.length, before);
+});
+
+test('.GIT and .Git are refused like .git: in the request (400) and for a link that resolves under them', async (t) => {
+  const { read, list, create, root, app } = await setup(t);
+  const before = app.fake.state.execCalls.length;
+  for (const p of ['.GIT/config', '.Git', 'vendor/foo/.gIT/config']) assert.equal((await read(p)).status, 400, p);
+  assert.equal((await list('.GIT')).status, 400);
+  assert.equal((await create('.Git', 'dir')).status, 400);
+  assert.equal(app.fake.state.execCalls.length, before);
+  fs.mkdirSync(path.join(root, 'vendor/foo/.GIT'));
+  fs.writeFileSync(path.join(root, 'vendor/foo/.GIT/config'), 'x');
+  fs.symlinkSync('vendor/foo/.GIT', path.join(root, 'upper'));
+  refusedWith(await read('upper/config'), 403, 'PATH_REFUSED');
+});
