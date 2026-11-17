@@ -32,8 +32,8 @@ All file I/O is `POST $CONDUCTOR_URL/api/exec` running one POSIX `sh` helper (`s
 
 ## Known limitations
 
-- The hash check and the rename of a save are separate steps on the target; a writer inside that window is overwritten.
-- Confinement stops path tricks in requests and existing symlinks, not a process racing the filesystem.
+- A save stages the new content first, then hashes and renames back to back on the target; a writer landing in the gap between that hash and the rename is still overwritten.
+- Confinement refuses any `.git` component (any letter case) of a resolved path, covering request-borne tricks and symlinks that already exist; it does not stop a process racing the filesystem between resolution and the operation.
 - Mixed line endings are normalised by Monaco; only UTF-8 files open as text.
 - Regex dialect depends on the engine shown in the search panel (ripgrep, or `git grep -E` which needs a git work tree).
 - Changes on disk are detected only at save, not live.

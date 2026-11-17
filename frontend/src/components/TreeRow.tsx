@@ -27,14 +27,14 @@ const noteFor = (e: Entry): string | null => {
   return null;
 };
 
-export function TreeRow({ entry, path, depth, expanded, active, onToggle, onOpen, onAction }: {
-  entry: Entry; path: string; depth: number; expanded: boolean; active: boolean;
+export function TreeRow({ entry, path, depth, expanded, active, locked, onToggle, onOpen, onAction }: {
+  entry: Entry; path: string; depth: number; expanded: boolean; active: boolean; locked: boolean;
   onToggle: () => void; onOpen: () => void; onAction: EntryActionHandler;
 }) {
   const behavior = behaviorOf(entry);
   const note = noteFor(entry);
   const isDir = behavior === 'dir';
-  const ref: EntryRef = { path, kind: isDir ? 'dir' : 'file', dir: isDir ? path : path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '' };
+  const ref: EntryRef = { path, kind: isDir ? 'dir' : 'file', dir: isDir ? path : path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '', locked };
   const Icon = entry.kind === 'symlink' ? LinkIcon : isDir ? (expanded ? FolderOpenIcon : FolderIcon) : FileIcon;
   const suffix = entry.kind === 'symlink' && !note && entry.target ? ` → ${entry.target}` : '';
   const inert = behavior === 'none';

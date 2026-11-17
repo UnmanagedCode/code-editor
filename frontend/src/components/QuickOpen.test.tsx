@@ -66,6 +66,17 @@ describe('QuickOpen', () => {
     expect(option.querySelector('mark')).not.toBeNull();
   });
 
+  it('shows the dimmed path only when it differs from the file name (a root-level file is not printed twice)', async () => {
+    const { user } = await setup();
+    ctrlP();
+    await user.type(await screen.findByRole('combobox', { name: 'Find file' }), 'readme');
+    const option = await screen.findByRole('option');
+    expect(option.textContent).toBe('README.md');
+    await user.clear(screen.getByRole('combobox', { name: 'Find file' }));
+    await user.type(screen.getByRole('combobox', { name: 'Find file' }), 'util');
+    expect((await screen.findByRole('option')).textContent).toBe('util.tssrc/lib/util.ts');
+  });
+
   it('refetches the list on every open and again after a file operation changes the tree', async () => {
     const { backend, user } = await setup();
     ctrlP();

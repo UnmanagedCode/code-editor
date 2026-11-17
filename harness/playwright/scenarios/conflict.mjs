@@ -22,6 +22,15 @@ export default async function ({ page, url, app, world, shot, check, allow }) {
   check(await app.getByText(/On disk \(left, read-only\)/).count() === 1, 'the diff is labelled disk vs buffer');
   await shot('diff');
 
+  // Ctrl+S with focus in the diff's editable side saves (here: conflicts again, so one more request and the bar stays).
+  let puts = 0;
+  page.on('request', (r) => { if (r.method() === 'PUT' && r.url().includes('/api/file')) puts++; });
+  await app.locator('.monaco-diff-editor .editor.modified .view-lines').click();
+  await page.keyboard.press('Control+s');
+  await page.waitForTimeout(500);
+  check(puts === 1, 'Ctrl+S inside the diff sends a save');
+  await bar.waitFor();
+
   await app.getByRole('button', { name: 'Overwrite', exact: true }).click();
   await bar.waitFor({ state: 'detached' });
   await dirtyDot(app).waitFor({ state: 'detached' });

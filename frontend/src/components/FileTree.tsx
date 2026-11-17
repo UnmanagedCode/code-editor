@@ -1,7 +1,7 @@
 import { LoaderCircleIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { join } from '@/lib/paths';
+import { isUnder, join } from '@/lib/paths';
 import type { useTree } from '@/state/tree';
 import { EntryContextItems, type EntryActionHandler } from './EntryMenu';
 import { RefusalAlert } from './RefusalAlert';
@@ -9,8 +9,8 @@ import { behaviorOf, TreeRow } from './TreeRow';
 
 type Tree = ReturnType<typeof useTree>;
 
-function Children({ tree, dir, depth, showIgnored, activePath, onOpen, onAction }: {
-  tree: Tree; dir: string; depth: number; showIgnored: boolean; activePath: string | null;
+function Children({ tree, dir, depth, showIgnored, activePath, busyPaths, onOpen, onAction }: {
+  tree: Tree; dir: string; depth: number; showIgnored: boolean; activePath: string | null; busyPaths: string[];
   onOpen: (path: string) => void; onAction: EntryActionHandler;
 }): ReactNode {
   const state = tree.dirs[dir];
@@ -24,8 +24,8 @@ function Children({ tree, dir, depth, showIgnored, activePath, onOpen, onAction 
         const open = behavior === 'dir' && tree.expanded.has(path);
         return (
           <div key={e.name} role="group">
-            <TreeRow entry={e} path={path} depth={depth} expanded={open} active={activePath === path} onToggle={() => tree.toggle(path)} onOpen={() => onOpen(path)} onAction={onAction} />
-            {open && <Children tree={tree} dir={path} depth={depth + 1} showIgnored={showIgnored} activePath={activePath} onOpen={onOpen} onAction={onAction} />}
+            <TreeRow entry={e} path={path} depth={depth} expanded={open} active={activePath === path} locked={busyPaths.some((b) => isUnder(b, path))} onToggle={() => tree.toggle(path)} onOpen={() => onOpen(path)} onAction={onAction} />
+            {open && <Children tree={tree} dir={path} depth={depth + 1} showIgnored={showIgnored} activePath={activePath} busyPaths={busyPaths} onOpen={onOpen} onAction={onAction} />}
           </div>
         );
       })}
@@ -44,8 +44,8 @@ function Children({ tree, dir, depth, showIgnored, activePath, onOpen, onAction 
 }
 
 /** The lazily loaded tree. A root that cannot be listed is a refusal alert with Retry, never a blank tree. */
-export function FileTree({ tree, rootName, showIgnored, activePath, onOpen, onAction }: {
-  tree: Tree; rootName: string; showIgnored: boolean; activePath: string | null; onOpen: (path: string) => void; onAction: EntryActionHandler;
+export function FileTree({ tree, rootName, showIgnored, activePath, busyPaths, onOpen, onAction }: {
+  tree: Tree; rootName: string; busyPaths: string[]; showIgnored: boolean; activePath: string | null; onOpen: (path: string) => void; onAction: EntryActionHandler;
 }) {
   const root = tree.dirs[''];
   if (root?.status === 'error' && root.entries.length === 0) {
@@ -58,7 +58,7 @@ export function FileTree({ tree, rootName, showIgnored, activePath, onOpen, onAc
       <div role="tree" aria-label="Files">
         {!root || (root.status === 'loading' && root.entries.length === 0)
           ? <p className="flex items-center gap-1.5 p-2 text-xs text-muted-foreground"><LoaderCircleIcon className="size-3 animate-spin" /> Loading…</p>
-          : <Children tree={tree} dir="" depth={0} showIgnored={showIgnored} activePath={activePath} onOpen={onOpen} onAction={onAction} />}
+          : <Children tree={tree} dir="" depth={0} showIgnored={showIgnored} activePath={activePath} busyPaths={busyPaths} onOpen={onOpen} onAction={onAction} />}
       </div>
       <ContextMenu>
         <ContextMenuTrigger asChild><div data-testid="tree-background" className="min-h-16 flex-1" /></ContextMenuTrigger>

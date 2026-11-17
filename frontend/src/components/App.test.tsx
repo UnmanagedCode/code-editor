@@ -82,6 +82,7 @@ describe('switching root with unsaved buffers', () => {
     expect(window.location.search).toContain('project=other');
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(window.location.search).toContain('project=app'));
+    expect(window.location.search).toBe('?project=app&file=a.txt');
     expect(screen.getByRole('button', { name: /Switch root/ }).textContent).toContain('app');
     expect(screen.getByRole('tab', { name: /a\.txt/ })).toBeTruthy();
   });

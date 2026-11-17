@@ -14,5 +14,3 @@ export function useTheme(): Theme {
   return useSyncExternalStore(subscribe, current);
 }
 
-/** Whether cc's bridge owns the theme (the page is embedded in cc). */
-export const isEmbedded = (): boolean => document.documentElement.hasAttribute('data-cc-theme');

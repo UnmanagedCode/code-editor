@@ -3,11 +3,11 @@ import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-m
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 
 /** What a menu acts on. `dir` is the folder New file/folder create in (the entry itself when it is a folder, else its parent). */
-export type EntryRef = { path: string; kind: 'dir' | 'file'; dir: string; isRoot?: boolean };
+export type EntryRef = { path: string; kind: 'dir' | 'file'; dir: string; isRoot?: boolean; /** A save is in flight beneath it: Rename and Delete are disabled. */ locked?: boolean };
 export type EntryAction = 'new-file' | 'new-folder' | 'rename' | 'delete';
 export type EntryActionHandler = (action: EntryAction, entry: EntryRef) => void;
 
-type Item = { action: EntryAction; label: string; icon: React.ReactNode; destructive?: boolean };
+type Item = { action: EntryAction; label: string; icon: React.ReactNode; destructive?: boolean; disabled?: boolean };
 
 /** The one item list both menus render: New file, New folder, Rename, Delete (the root has no Rename/Delete). */
 export function entryItems(entry: EntryRef): Item[] {
@@ -16,8 +16,8 @@ export function entryItems(entry: EntryRef): Item[] {
     { action: 'new-folder', label: 'New folder', icon: <FolderPlusIcon /> },
   ];
   if (!entry.isRoot) {
-    items.push({ action: 'rename', label: 'Rename', icon: <PencilIcon /> });
-    items.push({ action: 'delete', label: 'Delete', icon: <Trash2Icon />, destructive: true });
+    items.push({ action: 'rename', label: 'Rename', icon: <PencilIcon />, disabled: entry.locked });
+    items.push({ action: 'delete', label: 'Delete', icon: <Trash2Icon />, destructive: true, disabled: entry.locked });
   }
   return items;
 }
@@ -26,7 +26,7 @@ export function EntryContextItems({ entry, onAction }: { entry: EntryRef; onActi
   return entryItems(entry).map((i) => (
     <span key={i.action} className="contents">
       {i.destructive && <ContextMenuSeparator />}
-      <ContextMenuItem variant={i.destructive ? 'destructive' : 'default'} onSelect={() => onAction(i.action, entry)}>{i.icon}{i.label}</ContextMenuItem>
+      <ContextMenuItem variant={i.destructive ? 'destructive' : 'default'} disabled={i.disabled} onSelect={() => onAction(i.action, entry)}>{i.icon}{i.label}</ContextMenuItem>
     </span>
   ));
 }
@@ -35,7 +35,7 @@ export function EntryDropdownItems({ entry, onAction }: { entry: EntryRef; onAct
   return entryItems(entry).map((i) => (
     <span key={i.action} className="contents">
       {i.destructive && <DropdownMenuSeparator />}
-      <DropdownMenuItem variant={i.destructive ? 'destructive' : 'default'} onSelect={() => onAction(i.action, entry)}>{i.icon}{i.label}</DropdownMenuItem>
+      <DropdownMenuItem variant={i.destructive ? 'destructive' : 'default'} disabled={i.disabled} onSelect={() => onAction(i.action, entry)}>{i.icon}{i.label}</DropdownMenuItem>
     </span>
   ));
 }

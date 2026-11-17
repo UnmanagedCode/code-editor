@@ -19,7 +19,7 @@ export function leafNameError(name: string): string | null {
   if (name.trim() === '') return 'Enter a name.';
   if (name.includes('/')) return 'A name cannot contain "/".';
   if (name === '.' || name === '..') return `"${name}" is not a valid name.`;
-  if (name === '.git') return '".git" cannot be used.';
+  if (name.toLowerCase() === '.git') return `"${name}" cannot be used.`; // any case: case-insensitive file systems
   if (name.includes('\0')) return 'A name cannot contain NUL.';
   return null;
 }

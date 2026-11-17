@@ -22,6 +22,8 @@ export interface DiffHandle {
   dispose(): void;
 }
 
+export type DiffOptions = { narrow: boolean; path: string; /** Ctrl/Cmd+S in the diff's editable (live) side. */ onSave: () => void };
+
 export type MountOptions = { readOnly: boolean; narrow: boolean; onSave: () => void; onQuickOpen: () => void };
 
 export type ThemeDefinition = {
@@ -35,7 +37,7 @@ export type ThemeDefinition = {
 export interface EditorHost {
   createModel(path: string, text: string): EditorModel;
   mount(element: HTMLElement, model: EditorModel, options: MountOptions): EditorHandle;
-  mountDiff(element: HTMLElement, diskText: string, live: EditorModel, options: { narrow: boolean; path: string }): DiffHandle;
+  mountDiff(element: HTMLElement, diskText: string, live: EditorModel, options: DiffOptions): DiffHandle;
   applyTheme(theme: ThemeDefinition): void;
   languageFor(path: string): string;
 }

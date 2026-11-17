@@ -24,6 +24,9 @@ class Model implements EditorModel {
   dispose() { this.inner.dispose(); }
 }
 
+const shortcut = (editor: monaco.editor.IStandaloneCodeEditor, id: string, label: string, keybinding: number, run: () => void) =>
+  editor.addAction({ id, label, keybindings: [keybinding], run: () => run() });
+
 const baseOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
   automaticLayout: true,
   scrollBeyondLastLine: false,
@@ -47,8 +50,12 @@ export const monacoHost: EditorHost = {
       minimap: { enabled: !options.narrow },
       wordWrap: options.narrow ? 'on' : 'off',
     });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, options.onSave);
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, options.onQuickOpen);
+    // addAction (unlike addCommand) returns a disposable: a command left registered after its editor is gone throws in
+    // the next editor that receives the key.
+    const actions = [
+      shortcut(editor, 'code-editor.save', 'Save', monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, options.onSave),
+      shortcut(editor, 'code-editor.quickOpen', 'Quick open', monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, options.onQuickOpen),
+    ];
     return {
       focus: () => editor.focus(),
       revealLine(line: number) {
@@ -56,7 +63,10 @@ export const monacoHost: EditorHost = {
         editor.setPosition({ lineNumber: line, column: 1 });
         editor.focus();
       },
-      dispose: () => editor.dispose(),
+      dispose() {
+        for (const a of actions) a.dispose();
+        editor.dispose();
+      },
     };
   },
 
@@ -65,12 +75,18 @@ export const monacoHost: EditorHost = {
     const diff = monaco.editor.createDiffEditor(element, {
       ...baseOptions,
       originalEditable: false,
+      // The gutter hunk menus are not needed here (the live side is edited directly), and their menu context keys outlive a disposed diff editor.
+      renderGutterMenu: false,
+      renderMarginRevertIcon: false,
       renderSideBySide: !options.narrow,
       minimap: { enabled: false },
     });
     diff.setModel({ original, modified: (live as Model).inner });
+    // Ctrl/Cmd+S from the editable side saves, like the plain editor.
+    const save = shortcut(diff.getModifiedEditor(), 'code-editor.diff.save', 'Save', monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, options.onSave);
     return {
       dispose() {
+        save.dispose();
         diff.dispose();
         original.dispose();
       },

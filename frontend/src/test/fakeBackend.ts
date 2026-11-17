@@ -12,16 +12,17 @@ export function installBackend(init: {
   links?: Record<string, Entry['target']>;
   limitBytes?: number;
 }) {
-  const disk = new Map<string, { content: string; version: number; binary?: number; truncatedSize?: number }>();
+  const disk = new Map<string, { key: string; content: string; version: number; binary?: number; truncatedSize?: number }>();
   const set = (path: string, f: string | BackendFile) => {
-    if (typeof f === 'string') disk.set(path, { content: f, version: 1 });
-    else if ('binary' in f) disk.set(path, { content: '', version: 1, binary: f.size });
-    else disk.set(path, { content: f.content, version: 1, ...('truncated' in f ? { truncatedSize: f.size } : {}) });
+    if (typeof f === 'string') disk.set(path, { key: path, content: f, version: 1 });
+    else if ('binary' in f) disk.set(path, { key: path, content: '', version: 1, binary: f.size });
+    else disk.set(path, { key: path, content: f.content, version: 1, ...('truncated' in f ? { truncatedSize: f.size } : {}) });
   };
   for (const [p, f] of Object.entries(init.files)) set(p, f);
   const ignored = new Set(init.ignored ?? []);
   const links = init.links ?? {};
-  const hashOf = (path: string) => { const f = disk.get(path); return f ? `hash:${path}:${f.version}` : null; };
+  // Like a content hash, it survives a rename: keyed by the path the file was created at.
+  const hashOf = (path: string) => { const f = disk.get(path); return f ? `hash:${f.key}:${f.version}` : null; };
   const calls = { list: [] as string[], read: [] as string[], write: [] as { path: string; content: string; expectedHash: string | null }[], create: [] as string[], rename: [] as [string, string][], remove: [] as string[], search: [] as { q: string; regex: boolean; matchCase: boolean }[], files: 0 };
   const notFound = () => new ApiError(404, 'no such file or directory', 'NOT_FOUND');
   const limit = init.limitBytes ?? 2 * 1024 * 1024;
@@ -67,7 +68,7 @@ export function installBackend(init: {
     const current = hashOf(path);
     if (current !== expectedHash) throw new ApiError(409, 'the file changed on disk since it was opened', 'SAVE_CONFLICT', { currentHash: current, code: 'SAVE_CONFLICT' });
     const f = disk.get(path);
-    if (f) { f.content = content; f.version++; } else disk.set(path, { content, version: 1 });
+    if (f) { f.content = content; f.version++; } else disk.set(path, { key: path, content, version: 1 });
     return { hash: hashOf(path)!, size: content.length };
   });
   vi.spyOn(endpoints, 'create').mockImplementation(async (_t: Target, path: string, type: 'file' | 'dir') => {

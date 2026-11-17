@@ -26,7 +26,7 @@ describe('paths', () => {
   });
 
   it('leafNameError refuses empty, slash, dot segments, .git and NUL; accepts ordinary and dotted names', () => {
-    for (const bad of ['', '  ', 'a/b', '.', '..', '.git', 'a\0b']) expect(leafNameError(bad), JSON.stringify(bad)).not.toBeNull();
-    for (const ok of ['a', '.gitignore', 'a b', '-rf', 'a..b', '.github']) expect(leafNameError(ok), ok).toBeNull();
+    for (const bad of ['', '  ', 'a/b', '.', '..', '.git', '.GIT', '.Git', '.gIt', 'a\0b']) expect(leafNameError(bad), JSON.stringify(bad)).not.toBeNull();
+    for (const ok of ['a', '.gitignore', '.GITIGNORE', 'a b', '-rf', 'a..b', '.github']) expect(leafNameError(ok), ok).toBeNull();
   });
 });

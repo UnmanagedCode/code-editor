@@ -39,7 +39,7 @@ async function runOnce(name) {
     });
     const page = await context.newPage();
     const origin = new URL(host?.url ?? world.url).origin;
-    page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
+    page.on('pageerror', (e) => problems.push(`page error: ${e.stack ?? e.message}`));
     page.on('console', (m) => {
       if (m.type() !== 'error') return;
       const text = m.text();

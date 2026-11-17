@@ -1,9 +1,13 @@
 import { act, renderHook } from '@testing-library/react';
+import { StrictMode, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { makeFakeHost } from '@/test/fakeEditorHost';
 import { EMPTY_TABS, isDirty, tabsReducer, useTabs, type Tab, type TabsState } from './tabs';
 
+const ids = new Map<string, number>();
+// One id per path in a test, as a tab keeps its id across renames.
 const tab = (path: string, extra: Partial<Tab> = {}): Tab => ({
+  id: ids.get(path) ?? ids.set(path, ids.size + 1).get(path)!, bom: false,
   path, kind: 'text', model: null, hash: 'h', savedVersionId: 1, readOnly: false, truncated: false, size: 1, limitBytes: 100,
   conflict: null, diff: null, reveal: null, ...extra,
 });
@@ -22,7 +26,7 @@ describe('tabsReducer', () => {
     let s = open(EMPTY_TABS, 'a');
     s = tabsReducer(s, { type: 'open', tab: tab('a', { reveal: 7 }) });
     expect(s.tabs[0].reveal).toBe(7);
-    s = tabsReducer(s, { type: 'revealed', path: 'a' });
+    s = tabsReducer(s, { type: 'revealed', id: ids.get('a')! });
     expect(s.tabs[0].reveal).toBeNull();
   });
 
@@ -59,17 +63,17 @@ describe('tabsReducer', () => {
 
   it('conflict → saved clears the conflict and diff and records the new hash/version', () => {
     let s = open(EMPTY_TABS, 'a');
-    s = tabsReducer(s, { type: 'conflict', path: 'a', currentHash: 'x' });
-    s = tabsReducer(s, { type: 'diff', path: 'a', diff: { text: 't', hash: 'x', deleted: false } });
+    s = tabsReducer(s, { type: 'conflict', id: ids.get('a')!, currentHash: 'x' });
+    s = tabsReducer(s, { type: 'diff', id: ids.get('a')!, diff: { text: 't', hash: 'x', deleted: false } });
     expect(s.tabs[0].conflict).toEqual({ currentHash: 'x' });
-    s = tabsReducer(s, { type: 'saved', path: 'a', hash: 'new', versionId: 9, size: 3 });
+    s = tabsReducer(s, { type: 'saved', id: ids.get('a')!, hash: 'new', versionId: 9, size: 3 });
     expect(s.tabs[0]).toMatchObject({ hash: 'new', savedVersionId: 9, conflict: null, diff: null, size: 3 });
   });
 
   it('conflict → reloaded clears the conflict and adopts the disk hash and version', () => {
     let s = open(EMPTY_TABS, 'a');
-    s = tabsReducer(s, { type: 'conflict', path: 'a', currentHash: null });
-    s = tabsReducer(s, { type: 'reloaded', path: 'a', hash: 'disk', versionId: 4, size: 2, readOnly: false, truncated: false });
+    s = tabsReducer(s, { type: 'conflict', id: ids.get('a')!, currentHash: null });
+    s = tabsReducer(s, { type: 'reloaded', id: ids.get('a')!, hash: 'disk', versionId: 4, size: 2, readOnly: false, truncated: false, bom: false });
     expect(s.tabs[0]).toMatchObject({ hash: 'disk', savedVersionId: 4, conflict: null });
   });
 });
@@ -128,5 +132,50 @@ describe('useTabs', () => {
     expect(isDirty(result.current.tabs[0])).toBe(false);
     act(() => (model as ReturnType<typeof fake.modelFor>).type('xy'));
     expect(isDirty(result.current.tabs[0])).toBe(true);
+  });
+});
+
+describe('useTabs buffer lifetime', () => {
+  it('disposes every open buffer when the workspace unmounts (a root switch must not leak Monaco models)', async () => {
+    const fake = makeFakeHost();
+    const { result, unmount } = renderHook(() => useTabs(fake.host));
+    act(() => { result.current.add(tab('a', { model: fake.host.createModel('a', 'x') })); result.current.add(tab('b', { model: fake.host.createModel('b', 'y') })); });
+    unmount();
+    await Promise.resolve();
+    expect(fake.modelFor('a').disposed && fake.modelFor('b').disposed).toBe(true);
+  });
+
+  it('does NOT dispose buffers on StrictMode’s simulated unmount/remount', async () => {
+    const fake = makeFakeHost();
+    const wrapper = ({ children }: { children: ReactNode }) => <StrictMode>{children}</StrictMode>;
+    const { result, unmount } = renderHook(() => useTabs(fake.host), { wrapper });
+    act(() => result.current.add(tab('a', { model: fake.host.createModel('a', 'x') })));
+    await Promise.resolve();
+    expect(fake.modelFor('a').disposed).toBe(false);
+    unmount();
+    await Promise.resolve();
+    expect(fake.modelFor('a').disposed).toBe(true);
+  });
+});
+
+describe('tab identity', () => {
+  it('a response for a tab that was renamed meanwhile lands on that tab (by id), not on whatever now has the old path', () => {
+    let s = open(EMPTY_TABS, 'old.txt');
+    const id = ids.get('old.txt')!;
+    s = tabsReducer(s, { type: 'renamed', from: 'old.txt', to: 'new.txt' });
+    s = tabsReducer(s, { type: 'saved', id, hash: 'H', versionId: 5, size: 1 });
+    expect(s.tabs[0]).toMatchObject({ path: 'new.txt', hash: 'H', savedVersionId: 5 });
+  });
+
+  it('a response for a closed tab changes nothing', () => {
+    const s = open(EMPTY_TABS, 'a');
+    const closed = tabsReducer(s, { type: 'close', path: 'a' });
+    expect(tabsReducer(closed, { type: 'saved', id: ids.get('a')!, hash: 'H', versionId: 2, size: 1 })).toEqual(closed);
+  });
+
+  it('reloaded carries the BOM flag of the disk version', () => {
+    let s = open(EMPTY_TABS, 'a');
+    s = tabsReducer(s, { type: 'reloaded', id: ids.get('a')!, hash: 'h', versionId: 2, size: 1, readOnly: false, truncated: false, bom: true });
+    expect(s.tabs[0].bom).toBe(true);
   });
 });

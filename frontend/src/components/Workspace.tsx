@@ -1,4 +1,4 @@
-import { FilesIcon, FileSearchIcon, SaveIcon, SearchIcon } from 'lucide-react';
+import { FilesIcon, FileSearchIcon, RefreshCwIcon, SaveIcon, SearchIcon } from 'lucide-react';
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { applyMonacoTheme } from '@/editor/monacoTheme';
 import { useEditorHost } from '@/editor/EditorHost';
@@ -108,6 +108,8 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
   };
 
   const onAction = (action: EntryAction, entry: EntryRef) => {
+    // A save in flight for a file at or under the entry: renaming or deleting now would race its response.
+    if ((action === 'rename' || action === 'delete') && tabs.some((t) => files.busy.has(t.id) && isUnder(t.path, entry.path))) return;
     if (action === 'new-file') setNameRequest({ mode: 'file', dir: entry.dir });
     else if (action === 'new-folder') setNameRequest({ mode: 'dir', dir: entry.dir });
     else if (action === 'rename') setNameRequest({ mode: 'rename', dir: parent(entry.path), current: leaf(entry.path) });
@@ -150,17 +152,20 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
   };
 
   const label = rootLabel(target);
+  // Paths whose rename or delete would race a save in flight.
+  const busyPaths = tabs.filter((t) => files.busy.has(t.id)).map((t) => t.path);
   const treeEl = (
-    <FileTree tree={tree} rootName={label} showIgnored={showIgnored} activePath={active?.path ?? null} onOpen={(p) => openFromSide(p)} onAction={onAction} />
+    <FileTree tree={tree} busyPaths={busyPaths} rootName={label} showIgnored={showIgnored} activePath={active?.path ?? null} onOpen={(p) => openFromSide(p)} onAction={onAction} />
   );
   const treeHeader = (
     <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5 text-xs text-muted-foreground">
       <label className="flex items-center gap-2"><Switch checked={showIgnored} onCheckedChange={setShowIgnored} aria-label="Show ignored" /> Show ignored</label>
+      <Button type="button" variant="ghost" size="icon-sm" aria-label="Refresh" title="Refresh the file tree" onClick={() => { tree.reloadAll(); filesChanged(); }}><RefreshCwIcon /></Button>
     </div>
   );
   const searchEl = <SearchPanel target={target} onOpen={(p, l) => openFromSide(p, l)} />;
 
-  const busy = active ? files.busy.has(active.path) : false;
+  const busy = active ? files.busy.has(active.id) : false;
   const editorArea = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {tabs.length > 0 && <TabBar tabs={tabs} active={active?.path ?? null} onActivate={(p) => tabsApi.dispatch({ type: 'activate', path: p })} onClose={requestClose} onSave={saveActive} />}
@@ -177,8 +182,8 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
       )}
       <div className="min-h-0 flex-1">
         {active ? (
-          active.diff ? <DiffPane key={`${active.path}:diff`} tab={active} narrow={narrow} />
-            : <EditorPane key={active.path} tab={active} narrow={narrow} onSave={saveActive} onQuickOpen={openQuick} onRevealed={() => tabsApi.dispatch({ type: 'revealed', path: active.path })} />
+          active.diff ? <DiffPane key={`${active.path}:diff`} tab={active} narrow={narrow} onSave={saveActive} />
+            : <EditorPane key={active.path} tab={active} narrow={narrow} onSave={saveActive} onQuickOpen={openQuick} onRevealed={() => tabsApi.dispatch({ type: 'revealed', id: active.id })} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
             {narrow

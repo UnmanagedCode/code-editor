@@ -1,4 +1,4 @@
-import type { DiffHandle, EditorHandle, EditorHost, EditorModel, MountOptions, ThemeDefinition } from '@/editor/EditorHost';
+import type { DiffHandle, DiffOptions, EditorHandle, EditorHost, EditorModel, MountOptions, ThemeDefinition } from '@/editor/EditorHost';
 
 export class FakeModel implements EditorModel {
   value: string;
@@ -21,7 +21,7 @@ export class FakeModel implements EditorModel {
 }
 
 export type FakeMount = { element: HTMLElement; model: FakeModel; options: MountOptions; revealed: number[]; disposed: boolean };
-export type FakeDiff = { element: HTMLElement; diskText: string; live: FakeModel; path: string; disposed: boolean };
+export type FakeDiff = { element: HTMLElement; diskText: string; live: FakeModel; path: string; options: DiffOptions; disposed: boolean };
 
 const LANGS: Record<string, string> = { ts: 'typescript', js: 'javascript', md: 'markdown', json: 'json', txt: 'plaintext' };
 
@@ -41,7 +41,7 @@ export function makeFakeHost() {
       return { focus() {}, revealLine(l) { mount.revealed.push(l); }, dispose() { mount.disposed = true; } };
     },
     mountDiff(element, diskText, live, o): DiffHandle {
-      const diff: FakeDiff = { element, diskText, live: live as FakeModel, path: o.path, disposed: false };
+      const diff: FakeDiff = { element, diskText, live: live as FakeModel, path: o.path, options: o, disposed: false };
       diffs.push(diff);
       return { dispose() { diff.disposed = true; } };
     },

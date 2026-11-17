@@ -18,6 +18,8 @@ export function App() {
   const [switching, setSwitching] = useState<{ dirty: string[]; busy: boolean } | null>(null);
   const [ccError, setCcError] = useState<string | null>(null);
   const workspace = useRef<WorkspaceHandle>(null);
+  // The open file of the committed root, so Cancel can put the whole route back (the URL already names the new root).
+  const committedFile = useRef<string | null>(route.file);
 
   // A cc ⋮ menu request (untrusted text) becomes the route only when api/roots lists it.
   useEffect(() => {
@@ -39,12 +41,12 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.project, route.worktree]);
 
-  const onFileChange = useCallback((path: string | null) => { if (sameRoot(urlRoot, committed)) setFile(path); }, [urlRoot?.project, urlRoot?.worktree, committed?.project, committed?.worktree, setFile]);
+  const onFileChange = useCallback((path: string | null) => { if (sameRoot(urlRoot, committed)) { committedFile.current = path; setFile(path); } }, [urlRoot?.project, urlRoot?.worktree, committed?.project, committed?.worktree, setFile]);
 
   const commitSwitch = () => { setSwitching(null); setCommitted(urlRoot); setInitialFile(route.file); };
   const cancelSwitch = () => {
     setSwitching(null);
-    setRoute({ project: committed?.project ?? null, worktree: committed?.worktree ?? null, file: committed ? route.file : null });
+    setRoute({ project: committed?.project ?? null, worktree: committed?.worktree ?? null, file: committed ? committedFile.current : null });
   };
   const saveAllThenSwitch = async () => {
     setSwitching((s) => (s ? { ...s, busy: true } : s));

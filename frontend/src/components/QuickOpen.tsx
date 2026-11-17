@@ -67,7 +67,7 @@ export function QuickOpen({ open, list, loading, error, onClose, onOpenFile }: {
               className={cn('flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-1.5 text-sm', i === cursor && 'bg-accent text-accent-foreground')}
             >
               <span className="shrink-0 font-medium">{leaf(m.path)}</span>
-              <span className="min-w-0 truncate text-xs text-muted-foreground"><Highlighted match={m} /></span>
+              {m.path !== leaf(m.path) && <span className="min-w-0 truncate text-xs text-muted-foreground"><Highlighted match={m} /></span>}
             </li>
           ))}
           {list && matches.length === 0 && <li className="p-2 text-sm text-muted-foreground" role="presentation">No matching files.</li>}

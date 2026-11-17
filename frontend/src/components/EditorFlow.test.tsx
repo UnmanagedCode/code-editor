@@ -1,11 +1,13 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { endpoints } from '@/lib/endpoints';
 import { installBackend } from '@/test/fakeBackend';
 import { renderWithHost } from '@/test/render';
 import { Workspace } from './Workspace';
 
 const target = { project: 'app', worktree: null };
-const FILES = { 'a.txt': 'alpha\n', 'b.txt': 'beta\n', 'blob.bin': { binary: true as const, size: 1234 }, 'big.txt': { content: 'first part', truncated: true as const, size: 9_999_999 } };
+const BOM = '\uFEFF';
+const FILES = { 'a.txt': 'alpha\n', 'b.txt': 'beta\n', 'bom.txt': `${BOM}hello\n`, 'plain.txt': 'plain\n', 'crlf.txt': 'one\r\ntwo\r\n', 'blob.bin': { binary: true as const, size: 1234 }, 'big.txt': { content: 'first part', truncated: true as const, size: 9_999_999 } };
 
 async function open(name = 'a.txt', onFileChange: (p: string | null) => void = () => {}) {
   const backend = installBackend({ files: FILES, limitBytes: 2_097_152 });
@@ -93,6 +95,124 @@ describe('editing and saving', () => {
   });
 });
 
+describe('byte order mark', () => {
+  it('a BOM is kept out of the buffer (Monaco drops it) and written back on save, on every save', async () => {
+    const { fake, backend } = await open('bom.txt');
+    expect(fake.modelFor('bom.txt').getValue()).toBe('hello\n');
+    act(() => fake.modelFor('bom.txt').type('hello!\n'));
+    ctrlS();
+    await waitFor(() => expect(dirtyDot()).toBeNull());
+    expect(backend.calls.write[0].content).toBe(`${BOM}hello!\n`);
+    act(() => fake.modelFor('bom.txt').type('again\n'));
+    ctrlS();
+    await waitFor(() => expect(backend.calls.write).toHaveLength(2));
+    expect(backend.calls.write[1].content).toBe(`${BOM}again\n`);
+  });
+
+  it('a file without a BOM does not gain one', async () => {
+    const { fake, backend } = await open('plain.txt');
+    act(() => fake.modelFor('plain.txt').type('x\n'));
+    ctrlS();
+    await waitFor(() => expect(backend.calls.write).toHaveLength(1));
+    expect(backend.calls.write[0].content).toBe('x\n');
+  });
+
+  it('Reload and the diff view handle a BOM on disk: the buffer and the diff text are BOM-free, the next save restores it', async () => {
+    const { fake, backend, user } = await open('bom.txt');
+    act(() => fake.modelFor('bom.txt').type('mine\n'));
+    backend.diskEdit('bom.txt', `${BOM}worker\n`);
+    ctrlS();
+    await screen.findByText('This file changed on disk since you opened it.');
+    await user.click(screen.getByRole('button', { name: 'View diff' }));
+    await waitFor(() => expect(fake.diffs).toHaveLength(1));
+    expect(fake.diffs[0].diskText).toBe('worker\n');
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+    await waitFor(() => expect(screen.queryByText('This file changed on disk since you opened it.')).toBeNull());
+    expect(fake.modelFor('bom.txt').getValue()).toBe('worker\n');
+    act(() => fake.modelFor('bom.txt').type('after reload\n'));
+    ctrlS();
+    await waitFor(() => expect(backend.calls.write.at(-1)!.content).toBe(`${BOM}after reload\n`));
+  });
+
+  it('a conflict on a file that LOSES its BOM on disk: Reload adopts the disk state (no BOM) for later saves', async () => {
+    const { fake, backend, user } = await open('bom.txt');
+    act(() => fake.modelFor('bom.txt').type('mine\n'));
+    backend.diskEdit('bom.txt', 'no bom now\n');
+    ctrlS();
+    await screen.findByText('This file changed on disk since you opened it.');
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+    await waitFor(() => expect(screen.queryByText('This file changed on disk since you opened it.')).toBeNull());
+    act(() => fake.modelFor('bom.txt').type('x\n'));
+    ctrlS();
+    await waitFor(() => expect(backend.calls.write.at(-1)!.content).toBe('x\n'));
+  });
+
+  it('CRLF text is written back as the buffer holds it', async () => {
+    const { fake, backend } = await open('crlf.txt');
+    expect(fake.modelFor('crlf.txt').getValue()).toBe('one\r\ntwo\r\n');
+    act(() => fake.modelFor('crlf.txt').type('X one\r\ntwo\r\n'));
+    ctrlS();
+    await waitFor(() => expect(backend.calls.write).toHaveLength(1));
+    expect(backend.calls.write[0].content).toBe('X one\r\ntwo\r\n');
+  });
+});
+
+/** Makes the NEXT write apply on the (fake) server at once but answer only when the returned release() is called. */
+function holdNextWrite() {
+  const real = vi.mocked(endpoints.write).getMockImplementation()!;
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  vi.mocked(endpoints.write).mockImplementationOnce(async (...args) => { const r = await real(...args); await gate; return r; });
+  return release;
+}
+
+describe('overlapping saves', () => {
+  it('pressing Ctrl+S twice while a save is in flight is one write and no false conflict', async () => {
+    const { fake, backend } = await open();
+    act(() => fake.modelFor('a.txt').type('one\n'));
+    const release = holdNextWrite();
+    ctrlS();
+    await waitFor(() => expect(backend.calls.write).toHaveLength(1));
+    ctrlS();
+    release();
+    await waitFor(() => expect(dirtyDot()).toBeNull());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(backend.calls.write).toHaveLength(1);
+    expect(screen.queryByText('This file changed on disk since you opened it.')).toBeNull();
+  });
+
+  it('text typed while a save is in flight is saved by the queued save, against the new hash', async () => {
+    const { fake, backend } = await open();
+    act(() => fake.modelFor('a.txt').type('one\n'));
+    const release = holdNextWrite();
+    ctrlS();
+    await waitFor(() => expect(backend.calls.write).toHaveLength(1));
+    act(() => fake.modelFor('a.txt').type('two\n'));
+    ctrlS();
+    release();
+    await waitFor(() => expect(backend.calls.write).toHaveLength(2));
+    expect(backend.calls.write[1]).toEqual({ path: 'a.txt', content: 'two\n', expectedHash: 'hash:a.txt:2' });
+    await waitFor(() => expect(dirtyDot()).toBeNull());
+    expect(screen.queryByText('This file changed on disk since you opened it.')).toBeNull();
+  });
+
+  it('Rename and Delete are disabled in the row menu while that file is being saved', async () => {
+    const { fake, user } = await open();
+    act(() => fake.modelFor('a.txt').type('one\n'));
+    const release = holdNextWrite();
+    ctrlS();
+    await user.click(await screen.findByRole('button', { name: 'Actions for a.txt' }));
+    const menu = await screen.findByRole('menu');
+    for (const name of ['Rename', 'Delete']) expect(within(menu).getByRole('menuitem', { name }).getAttribute('aria-disabled')).toBe('true');
+    expect(within(menu).getByRole('menuitem', { name: 'New file' }).getAttribute('aria-disabled')).toBeNull();
+    await user.keyboard('{Escape}');
+    release();
+    await waitFor(() => expect(dirtyDot()).toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Actions for a.txt' }));
+    expect(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Rename' }).getAttribute('aria-disabled')).toBeNull();
+  });
+});
+
 describe('save conflict', () => {
   async function conflicted() {
     const ctx = await open();
@@ -173,6 +293,17 @@ describe('save conflict', () => {
     await ctx.user.click(screen.getByRole('button', { name: 'Overwrite' }));
     await waitFor(() => expect(ctx.backend.disk.get('a.txt')?.content).toBe('mine\n'));
     expect(ctx.backend.calls.write.at(-1)!.expectedHash).toBeNull();
+  });
+
+  it('Ctrl/Cmd+S works from the diff’s editable side: the diff editor is given a save handler that saves', async () => {
+    const { user, fake, backend } = await conflicted();
+    await user.click(screen.getByRole('button', { name: 'View diff' }));
+    await waitFor(() => expect(fake.diffs).toHaveLength(1));
+    const writes = backend.calls.write.length;
+    expect(typeof fake.diffs[0].options.onSave).toBe('function');
+    act(() => fake.diffs[0].options.onSave());
+    await waitFor(() => expect(backend.calls.write.length).toBe(writes + 1));
+    expect(backend.calls.write.at(-1)!.content).toBe('mine\n');
   });
 
   it('the conflict bar is announced as an alert', async () => {

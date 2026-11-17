@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/api';
 import { endpoints } from '@/lib/endpoints';
@@ -9,6 +9,38 @@ import { Workspace } from './Workspace';
 const target = { project: 'app', worktree: null };
 const mount = () => renderWithHost(<Workspace target={target} initialFile={null} onFileChange={() => {}} />);
 const FILES = { 'README.md': 'x', 'src/main.ts': 'y', 'src/lib/util.ts': 'z', 'ignored.log': 'i', 'build/out.js': 'o' };
+
+describe('refresh', () => {
+  it('a Refresh button re-lists the root and every expanded folder, so new files appear', async () => {
+    const backend = installBackend({ files: FILES });
+    const { user } = mount();
+    await user.click(await screen.findByRole('button', { name: /^src$/ }));
+    await screen.findByRole('treeitem', { name: /main\.ts/ });
+    backend.disk.set('added-at-root.txt', { key: 'k1', content: 'x', version: 1 });
+    backend.disk.set('src/added-in-src.ts', { key: 'k2', content: 'x', version: 1 });
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    await screen.findByRole('treeitem', { name: /added-at-root\.txt/ });
+    await screen.findByRole('treeitem', { name: /added-in-src\.ts/ });
+    expect(backend.calls.list).toEqual(['', 'src', '', 'src']);
+  });
+
+  it('Refresh also drops the quick-open file list, so the next open does not show stale files', async () => {
+    const backend = installBackend({ files: FILES });
+    const { user } = mount();
+    await screen.findByRole('treeitem', { name: /README\.md/ });
+    fireEvent.keyDown(document.body, { key: 'p', ctrlKey: true });
+    await screen.findAllByRole('option');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    const real = vi.mocked(endpoints.files).getMockImplementation()!;
+    vi.mocked(endpoints.files).mockImplementation(() => new Promise(() => {}));
+    fireEvent.keyDown(document.body, { key: 'p', ctrlKey: true });
+    expect(await screen.findByText('Loading files…')).toBeTruthy();
+    vi.mocked(endpoints.files).mockImplementation(real);
+    void backend;
+  });
+});
 
 describe('FileTree', () => {
   it('lists only the root at first and fetches a folder only when it is expanded', async () => {

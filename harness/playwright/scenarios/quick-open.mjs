@@ -12,6 +12,10 @@ export default async function ({ page, url, app, shot, check }) {
   await shot('fuzzy');
   const first = app.getByRole('option').first();
   check((await first.textContent()).includes('util.ts'), 'the fuzzy query ranks src/lib/util.ts first');
+  await input.fill('readme');
+  check((await app.getByRole('option').first().textContent()) === 'README.md', 'a root-level file shows its name once, without a repeated path');
+  await shot('root-level');
+  await input.fill('utl');
   await page.keyboard.press('Enter');
   await editor(app).waitFor();
   await app.getByRole('combobox').waitFor({ state: 'detached' }); // while a modal closes, the page behind it is still aria-hidden
