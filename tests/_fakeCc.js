@@ -102,6 +102,13 @@ function childEnv(state, spec) {
   return { ...process.env, PATH, ...spec.env };
 }
 
+/** Resolves the waiters registered for `kind` ('exec' | 'disconnect'). */
+function notify(state, kind) {
+  const rest = [];
+  for (const w of state.waiters) (w.kind === kind ? w.resolve() : rest.push(w));
+  state.waiters = rest;
+}
+
 function run(state, spec, req, res, body) {
   const started = Date.now();
   let argv = spec.argv;
@@ -158,6 +165,7 @@ function run(state, spec, req, res, body) {
     clearTimeout(timer);
     if (staged) fs.rmSync(staged, { force: true });
     state.disconnects.push(body);
+    notify(state, 'disconnect');
     kill();
   });
 }
@@ -172,7 +180,7 @@ export async function fakeCc({ projects = {} } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ce-fakecc-'));
   const state = {
     projects, home, execCalls: [], violations: [], disconnects: [], execHook: null,
-    down: new Set(), children: new Set(), pathDirs: new Map(), projectsRequests: 0,
+    down: new Set(), children: new Set(), pathDirs: new Map(), projectsRequests: 0, waiters: [],
   };
   const sockets = new Set();
   const send = (res, body, status = 200) => {
@@ -195,6 +203,7 @@ export async function fakeCc({ projects = {} } = {}) {
         let body;
         try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return send(res, { error: 'bad json', code: 'INVALID_ARGUMENT' }, 400); }
         state.execCalls.push(body);
+        notify(state, 'exec');
         let spec;
         try {
           spec = parse(state, body);
@@ -204,7 +213,10 @@ export async function fakeCc({ projects = {} } = {}) {
         }
         const hooked = state.execHook?.(body);
         if (hooked === 'reset') return req.socket.destroy();
-        if (hooked === 'hold') return; // never answered
+        if (hooked === 'hold') { // never answered; a client disconnect is recorded
+          res.on('close', () => { if (!res.writableEnded) { state.disconnects.push(body); notify(state, 'disconnect'); } });
+          return;
+        }
         if (hooked?.raw !== undefined) { res.statusCode = hooked.status; return res.end(hooked.raw); }
         if (hooked) return send(res, hooked.body, hooked.status);
         run(state, spec, req, res, body);
@@ -241,6 +253,9 @@ export async function fakeCc({ projects = {} } = {}) {
     state,
     url,
     server,
+    /** Resolves when the next exec request arrives / the next exec's client disconnects. */
+    nextExec() { return new Promise((resolve) => state.waiters.push({ kind: 'exec', resolve })); },
+    nextDisconnect() { return new Promise((resolve) => state.waiters.push({ kind: 'disconnect', resolve })); },
     systemDown(project, down = true) { if (down) state.down.add(project); else state.down.delete(project); },
     async close() {
       if (prev === undefined) delete process.env.CONDUCTOR_URL; else process.env.CONDUCTOR_URL = prev;
