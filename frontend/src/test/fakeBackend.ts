@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi, type MockInstance } from 'vitest';
 import { ApiError } from '@/lib/api';
 import { endpoints, type Entry, type RootProject, type Target } from '@/lib/endpoints';
 
@@ -35,9 +35,11 @@ export function installBackend(init: {
     searchResult: null as null | Awaited<ReturnType<typeof endpoints.search>>,
     searchError: null as ApiError | null,
     listError: null as ApiError | null,
+    rootsSpy: null as unknown as MockInstance<typeof endpoints.roots>,
   };
 
-  vi.spyOn(endpoints, 'roots').mockImplementation(async () => ({ projects: init.projects ?? [] }));
+  const rootsSpy = vi.spyOn(endpoints, 'roots').mockImplementation(async () => ({ projects: init.projects ?? [] }));
+  state.rootsSpy = rootsSpy;
   vi.spyOn(endpoints, 'list').mockImplementation(async (_t: Target, dir: string) => {
     calls.list.push(dir);
     if (state.listError) throw state.listError;

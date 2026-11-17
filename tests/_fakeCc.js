@@ -172,7 +172,7 @@ function run(state, spec, req, res, body) {
 
 /**
  * Starts the fake and points CONDUCTOR_URL at it; `close()` restores it.
- * `projects`: {name: {dir, system?, remoteId?, worktrees?: {name: dir}, systemUnreachable?, degraded?, hideTools?: [names]}}.
+ * `projects`: {name: {dir, workspace?, system?, remoteId?, worktrees?: {name: dir}, systemUnreachable?, degraded?, hideTools?: [names]}}.
  * Knobs on the returned object: `state.execCalls`, `state.violations` (any form-B or shell use), `state.disconnects`,
  * `state.execHook(body)` → `{status, body}` | `{status, raw}` | `'hold'` | `'reset'` | undefined, `systemDown(project, down)`.
  */
@@ -227,7 +227,7 @@ export async function fakeCc({ projects = {} } = {}) {
       state.projectsRequests++;
       if (state.projectsHook) { const h = state.projectsHook(); if (h === 'reset') return req.socket.destroy(); if (h) return send(res, h.body, h.status); }
       return send(res, Object.entries(state.projects).map(([name, p]) => ({
-        name, path: p.degraded ? '' : (isRemote(p) ? `/srv/cc-remote/${name}` : p.dir), workspace: null,
+        name, path: p.degraded ? '' : (isRemote(p) ? `/srv/cc-remote/${name}` : p.dir), workspace: p.workspace ?? null,
         system: p.system ?? 'local', remoteId: p.remoteId ?? null,
         systemUnreachable: p.systemUnreachable ?? null, gitRefusal: null,
         ...(p.degraded ? { degraded: p.degraded } : {}),

@@ -43,8 +43,8 @@ export async function seed() {
 
     const fake = await fakeCc({
       projects: {
-        app: { dir: app.root, worktrees: { wt1: wt.root } },
-        box: { dir: box.root, system: 'docker', remoteId: 'box' },
+        app: { dir: app.root, workspace: 'team', worktrees: { wt1: wt.root } },
+        box: { dir: box.root, workspace: 'team', system: 'docker', remoteId: 'box' },
         down: { dir: gone.root, system: 'docker', remoteId: 'down-box' },
         gone: { dir: gone.root, system: 'docker', remoteId: 'gone-box', systemUnreachable: 'provider died' },
       },

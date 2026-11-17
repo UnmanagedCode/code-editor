@@ -25,7 +25,7 @@ export default async function ({ page, url, app, world, shot, check, allow }) {
   await shot('unreachable');
 
   await page.goto(`${url}/`);
-  await app.getByRole('list', { name: 'Projects', exact: true }).waitFor();
+  await app.getByRole('textbox', { name: 'Filter projects', exact: true }).waitFor();
   check(await app.getByRole('button', { name: /^gone/ }).isDisabled(), 'a project cc reports unreachable is listed disabled');
   check(await app.getByText('provider died').count() === 1, 'with its reason');
   await shot('picker');

@@ -5,7 +5,7 @@ import { installBackend } from '@/test/fakeBackend';
 import { renderWithHost } from '@/test/render';
 import { App } from '../App';
 
-const project = (name: string, over: Partial<RootProject> = {}): RootProject => ({ name, system: 'local', remoteId: null, unreachable: null, degraded: null, worktrees: [], ...over });
+const project = (name: string, over: Partial<RootProject> = {}): RootProject => ({ name, workspace: null, system: 'local', remoteId: null, unreachable: null, degraded: null, worktrees: [], ...over });
 const PROJECTS = [project('app', { worktrees: [{ name: 'w1', branch: 'code-conductor/w1' }] }), project('other'), project('box', { system: 'docker', remoteId: 'ssh1' }), project('down', { unreachable: 'provider died' })];
 const FILES = { 'a.txt': 'alpha', 'b.txt': 'beta' };
 
@@ -14,7 +14,7 @@ function start(search = '') {
   const backend = installBackend({ files: FILES, projects: PROJECTS });
   return { backend, ...renderWithHost(<App />) };
 }
-const switchTo = async (user: ReturnType<typeof renderWithHost>['user'], name: RegExp) => {
+const switchTo = async (user: ReturnType<typeof renderWithHost>['user'], name: string) => {
   await user.click(screen.getByRole('button', { name: /Switch root/ }));
   await user.click(await within(await screen.findByRole('dialog')).findByRole('button', { name }));
 };
@@ -25,12 +25,13 @@ describe('App', () => {
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('Code Editor');
   });
 
-  it('without a root it offers the projects, nesting worktrees, listing unreachable ones disabled with their reason', async () => {
+  it('without a root it offers the filterable projects, worktrees behind a chevron, unreachable ones disabled with their reason', async () => {
     const { user } = start();
-    await screen.findByRole('list', { name: 'Projects' });
-    expect((screen.getByRole('button', { name: /^down/ }) as HTMLButtonElement).disabled).toBe(true);
+    await screen.findByRole('textbox', { name: 'Filter projects' });
+    expect((screen.getByRole('button', { name: 'down' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('provider died')).toBeTruthy();
     expect(screen.getByText('docker · ssh1')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Show worktrees of app' }));
     await user.click(screen.getByRole('button', { name: /^w1/ }));
     expect(window.location.search).toBe('?project=app&worktree=w1');
     expect((await screen.findByRole('button', { name: /Switch root/ })).textContent).toContain('app / w1');
@@ -66,6 +67,33 @@ describe('App', () => {
   });
 });
 
+describe('the project listing', () => {
+  it('is reloaded each time the picker opens', async () => {
+    const { user, backend } = start('?project=app');
+    await screen.findByRole('button', { name: /Switch root/ });
+    await waitFor(() => expect(backend.rootsSpy).toHaveBeenCalledTimes(1));
+    for (const n of [2, 3]) {
+      await user.click(screen.getByRole('button', { name: /Switch root/ }));
+      await waitFor(() => expect(backend.rootsSpy).toHaveBeenCalledTimes(n));
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    }
+  });
+
+  it('keeps the header System badge while a reload is pending', async () => {
+    const { user, backend } = start('?project=box');
+    const root = await screen.findByRole('button', { name: /Switch root/ });
+    await waitFor(() => expect(root.textContent).toContain('docker · ssh1'));
+    let release: () => void = () => {};
+    backend.rootsSpy.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve({ projects: PROJECTS }); }));
+    await user.click(root);
+    await waitFor(() => expect(backend.rootsSpy).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: /Switch root/, hidden: true }).textContent).toContain('docker · ssh1');
+    expect(within(await screen.findByRole('dialog')).getByRole('button', { name: /^box/ })).toBeTruthy();
+    act(() => release());
+  });
+});
+
 describe('switching root with unsaved buffers', () => {
   async function dirtyApp() {
     const ctx = start('?project=app&file=a.txt');
@@ -76,7 +104,7 @@ describe('switching root with unsaved buffers', () => {
 
   it('asks first; Cancel stays on the current root and restores the URL', async () => {
     const { user } = await dirtyApp();
-    await switchTo(user, /^other/);
+    await switchTo(user, 'other');
     const dialog = await screen.findByRole('dialog', { name: 'Unsaved changes' });
     expect(within(dialog).getByText('a.txt')).toBeTruthy();
     expect(window.location.search).toContain('project=other');
@@ -89,7 +117,7 @@ describe('switching root with unsaved buffers', () => {
 
   it('Discard switches without writing', async () => {
     const { user, backend } = await dirtyApp();
-    await switchTo(user, /^other/);
+    await switchTo(user, 'other');
     await user.click(within(await screen.findByRole('dialog', { name: 'Unsaved changes' })).getByRole('button', { name: 'Discard' }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Switch root/ }).textContent).toContain('other'));
     expect(backend.calls.write).toEqual([]);
@@ -98,7 +126,7 @@ describe('switching root with unsaved buffers', () => {
 
   it('Save all writes every dirty buffer, then switches', async () => {
     const { user, backend } = await dirtyApp();
-    await switchTo(user, /^other/);
+    await switchTo(user, 'other');
     await user.click(within(await screen.findByRole('dialog', { name: 'Unsaved changes' })).getByRole('button', { name: 'Save all' }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Switch root/ }).textContent).toContain('other'));
     expect(backend.calls.write).toEqual([{ path: 'a.txt', content: 'edited', expectedHash: 'hash:a.txt:1' }]);
@@ -107,7 +135,7 @@ describe('switching root with unsaved buffers', () => {
   it('Save all that hits a conflict does not switch: the buffer is kept', async () => {
     const { user, backend } = await dirtyApp();
     backend.diskEdit('a.txt', 'worker');
-    await switchTo(user, /^other/);
+    await switchTo(user, 'other');
     await user.click(within(await screen.findByRole('dialog', { name: 'Unsaved changes' })).getByRole('button', { name: 'Save all' }));
     await waitFor(() => expect(backend.calls.write).toHaveLength(1));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save all' })).toBeTruthy());
@@ -117,7 +145,7 @@ describe('switching root with unsaved buffers', () => {
   it('a clean workspace switches at once with no prompt', async () => {
     const { user } = start('?project=app&file=a.txt');
     await screen.findByRole('tab', { name: /a\.txt/ });
-    await switchTo(user, /^other/);
+    await switchTo(user, 'other');
     await waitFor(() => expect(screen.getByRole('button', { name: /Switch root/ }).textContent).toContain('other'));
     expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).toBeNull();
   });

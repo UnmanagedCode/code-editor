@@ -98,7 +98,7 @@ test('exec past maxOutputBytes is OUTPUT_TOO_LARGE, never a clipped answer', asy
 test('api/roots shapes projects with worktrees, system placement, and unreachable/degraded rows', async (t) => {
   const { root } = makePlainTree(t);
   const app = await startApp(t, { projects: {
-    zeta: { dir: root, worktrees: { w1: root } },
+    zeta: { dir: root, workspace: 'team', worktrees: { w1: root } },
     alpha: { dir: root, system: 'docker', remoteId: 'box' },
     down: { dir: root, system: 'docker', systemUnreachable: 'provider died' },
     bad: { dir: root, degraded: 'record unreadable' },
@@ -115,6 +115,8 @@ test('api/roots shapes projects with worktrees, system placement, and unreachabl
   assert.equal(by.down.unreachable, 'provider died');
   assert.equal(by.bad.degraded, 'record unreadable');
   assert.equal(by.zeta.unreachable, null);
+  assert.equal(by.zeta.workspace, 'team');
+  assert.deepEqual([by.alpha, by.bad, by.down].map((p) => p.workspace), [null, null, null]);
 });
 
 test('api/roots is 503 CONDUCTOR_UNAVAILABLE when cc is not set or answers garbage', async (t) => {

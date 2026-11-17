@@ -73,7 +73,7 @@ describe('useRoute', () => {
 });
 
 describe('resolveCcRequest', () => {
-  const projects = [{ name: 'app', system: 'local', remoteId: null, unreachable: null, degraded: null, worktrees: [{ name: 'wt1', branch: null }] }];
+  const projects = [{ name: 'app', workspace: null, system: 'local', remoteId: null, unreachable: null, degraded: null, worktrees: [{ name: 'wt1', branch: null }] }];
   it('accepts a listed project and worktree', () => {
     expect(resolveCcRequest(projects, { project: 'app', worktree: 'wt1' })).toEqual({ project: 'app', worktree: 'wt1' });
     expect(resolveCcRequest(projects, { project: 'app', worktree: null })).toEqual({ project: 'app', worktree: null });
