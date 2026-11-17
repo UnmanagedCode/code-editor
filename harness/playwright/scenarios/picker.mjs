@@ -34,6 +34,8 @@ export default async function ({ page, url, app, shot, check }) {
   check(await dialog.getByRole('button', { name: /^wt1/ }).getAttribute('aria-current') === 'true', 'the open worktree is marked current');
   check(await dialog.getByRole('button', { name: 'Show worktrees of app', exact: true }).getAttribute('aria-expanded') === 'true', 'and its project is pre-expanded');
   check(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth), 'long names do not overflow the dialog horizontally');
+  const listFits = () => dialog.locator('[data-slot="root-list"]').evaluate((el) => el.scrollWidth <= el.clientWidth);
+  check(await listFits(), 'nor the list scroller, with the long worktree row expanded');
   await shot('dialog-current');
 
   await dialogFilter.fill('zzz');

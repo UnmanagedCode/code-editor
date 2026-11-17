@@ -79,7 +79,7 @@ export function RootBrowser({ projects, error, current, onRetry, onPick, inDialo
   return (
     <div className="flex min-h-0 min-w-0 flex-col gap-3">
       <Input type="text" aria-label="Filter projects" placeholder="Filter projects" value={filter} onChange={(e) => setFilter(e.target.value)} />
-      <div className={inDialog ? 'min-w-0 max-h-[60dvh] overflow-y-auto pr-1' : 'min-w-0'}>
+      <div data-slot="root-list" className={inDialog ? 'min-w-0 max-h-[60dvh] overflow-y-auto pr-1' : 'min-w-0'}>
         {error && <RefusalAlert title="Cannot load projects" error={error} onRetry={onRetry} />}
         {projects === null && !error && <p className="p-2 text-sm text-muted-foreground">Loading projects…</p>}
         {projects !== null && groups.length === 0 && <p className="p-2 text-sm text-muted-foreground">{projects.length === 0 && !filter.trim() ? 'No projects.' : 'No project matches.'}</p>}

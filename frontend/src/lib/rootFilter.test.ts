@@ -24,6 +24,12 @@ describe('matching is a case-insensitive substring', () => {
     expect(groupRoots(MIXED, 'ature-')[0].projects[0].worktreeHit).toBe(true);
     expect(groupRoots(MIXED, 'lease/tw')[0].projects[0].worktreeHit).toBe(true);
   });
+  it('a worktree name matches regardless of case on either side', () => {
+    expect(names('feature-x', MIXED)).toEqual(['Delta']);
+    expect(names('FEATURE-X', MIXED)).toEqual(['Delta']);
+    expect(groupRoots(MIXED, 'FEATURE-X')[0].projects[0].worktreeHit).toBe(true);
+    expect(groupRoots(MIXED, 'release/two')[0].projects[0].worktreeHit).toBe(true);
+  });
 });
 
 describe('groupRoots', () => {

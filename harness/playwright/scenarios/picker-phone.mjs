@@ -18,7 +18,14 @@ export default async function ({ page, url, app, shot, check }) {
   check(!(await page.evaluate(() => window.__focused.includes('Filter projects'))), 'the filter never received focus while opening');
   const dlg = await dialog.evaluate((el) => [el.scrollWidth, el.clientWidth]);
   check(dlg[0] <= dlg[1], 'long names do not overflow the dialog horizontally');
+  const listFits = () => dialog.locator('[data-slot="root-list"]').evaluate((el) => el.scrollWidth <= el.clientWidth);
+  check(await listFits(), 'nor does the list scroller (long project name)');
   await shot('phone-dialog');
+  await dialog.getByRole('button', { name: 'Show worktrees of app', exact: true }).tap();
+  await dialog.getByRole('list', { name: 'Checkouts of app', exact: true }).waitFor();
+  check(await listFits(), 'nor with the long worktree and branch row expanded');
+  check((await dialog.evaluate((el) => [el.scrollWidth, el.clientWidth])).reduce((a, b) => a <= b), 'the dialog still fits with it expanded');
+  await shot('phone-expanded');
 
   await filter.tap();
   await page.keyboard.type('box');
