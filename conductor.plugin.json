@@ -1,0 +1,12 @@
+{
+  "id": "code-editor",
+  "name": "Code Editor",
+  "version": "0.1.0",
+  "pluginApi": 1,
+  "backend": { "start": "node server.js", "healthPath": "/api/health" },
+  "frontend": { "path": "/", "navLabel": "Code Editor", "keepAlive": true },
+  "menuItems": [
+    { "label": "Edit files", "scope": "project", "path": "/" },
+    { "label": "Edit files", "scope": "worktree", "path": "/" }
+  ]
+}
