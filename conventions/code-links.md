@@ -12,7 +12,7 @@ When you cite a code location to the user, write it as a markdown link, never in
 
 ## Link text
 - `<path relative to the project or worktree root>:<line>`, or `:<first>-<last>` for a range.
-- Backslash-escape `[`, `]`, `*`, `_` and `` ` `` in it.
+- Backslash-escape every ASCII punctuation character in it except `/ . - :`, `\` included, and percent-encode control characters (a newline is `%0A`).
 
 ## Shape
 - The query goes after `#plugin/code-editor/`. `http://cc.internal/?ccPath=…#plugin/code-editor/` is refused and shows as plain text.
