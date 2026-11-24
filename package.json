@@ -12,7 +12,7 @@
     "test": "npm run test:server && npm run test:ui",
     "test:server": "node --test \"tests/*.test.js\"",
     "test:ui": "vitest run --config frontend/vitest.config.ts",
-    "test:cc-link": "vitest run --config frontend/vitest.cc-link.config.ts",
+    "test:cc": "vitest run --config frontend/vitest.cc.config.ts",
     "harness": "node harness/playwright/run.mjs"
   },
   "dependencies": { "express": "^4.22.3" },

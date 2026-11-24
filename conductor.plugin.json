@@ -8,5 +8,8 @@
   "menuItems": [
     { "label": "Edit files", "scope": "project", "path": "/" },
     { "label": "Edit files", "scope": "worktree", "path": "/" }
+  ],
+  "conventions": [
+    { "slug": "code-links", "name": "Code Editor links", "description": "Cite code locations to the user as links that open Code Editor at the lines", "scope": "conductor", "file": "conventions/code-links.md" }
   ]
 }

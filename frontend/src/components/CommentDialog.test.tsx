@@ -132,6 +132,29 @@ describe('comment on selection', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  // Invariant: a bridge that throws, rejects or answers garbage never leaves the dialog stuck busy: it shows SEND_FAILED and Send works again.
+  it('a throwing, rejecting or malformed sendPrompt shows SEND_FAILED and re-enables Send', async () => {
+    const bridge = installBridge(null);
+    const ctx = await selected([session('s1')]);
+    const dialog = await openDialog(ctx);
+    await ctx.user.type(within(dialog).getByRole('textbox', { name: 'Comment' }), 'hello');
+    const failures: [string, () => unknown][] = [
+      ['throws', () => { throw new Error('boom'); }],
+      ['rejects', () => Promise.reject(new Error('boom'))],
+      ['returns a non-promise', () => undefined],
+      ['resolves to a non-result', async () => 'yes'],
+    ];
+    for (const [i, [what, impl]] of failures.entries()) {
+      bridge.sendPrompt.mockImplementationOnce(impl);
+      await ctx.user.click(sendButton(dialog));
+      await waitFor(() => expect(bridge.sendPrompt, what).toHaveBeenCalledTimes(i + 1));
+      await waitFor(() => expect(within(dialog).getByRole('alert').textContent, what).toMatch(/could not send the comment/));
+      await waitFor(() => expect(sendButton(dialog).disabled, what).toBe(false));
+      expect((within(dialog).getByRole('textbox', { name: 'Comment' }) as HTMLTextAreaElement).value).toBe('hello');
+    }
+    expect(bridge.sendPrompt).toHaveBeenCalledTimes(failures.length);
+  });
+
   // Invariant: session labels are untrusted text and never become markup.
   it('session labels render as text', async () => {
     installBridge(null);
@@ -170,6 +193,12 @@ describe('sendPromptWithin', () => {
     const result = sendPromptWithin('s1', 'text', 50);
     await vi.advanceTimersByTimeAsync(50);
     await expect(result).resolves.toEqual({ ok: false, code: 'TIMEOUT' });
+  });
+
+  // Invariant: sendPromptWithin never rejects: a throwing bridge resolves as SEND_FAILED.
+  it('a throwing bridge resolves SEND_FAILED', async () => {
+    win.ccBridge = { sendPrompt: vi.fn(() => { throw new Error('boom'); }) };
+    await expect(sendPromptWithin('s1', 'text', 50)).resolves.toEqual({ ok: false, code: 'SEND_FAILED' });
   });
 
   // Invariant: without a bridge nothing is sent.

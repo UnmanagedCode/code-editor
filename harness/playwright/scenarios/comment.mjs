@@ -21,6 +21,9 @@ export default async function ({ page, url, app, world, shot, check }) {
   const action = app.getByRole('menuitem', { name: /Comment on selection/ });
   await action.waitFor();
   await shot('context-menu');
+  // Monaco's menu drops a click that lands right after it opens (its guard against the opening right-click's release).
+  await action.hover();
+  await page.waitForTimeout(300);
   await action.click();
 
   const dialog = app.getByRole('dialog', { name: 'Comment on selection' });

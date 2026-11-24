@@ -17,14 +17,22 @@ export function activeSession(): BridgeSession | null {
   return s && typeof s.sessionId === 'string' && typeof s.project === 'string' ? { sessionId: s.sessionId, project: s.project, worktree: s.worktree ?? null } : null;
 }
 
-/** `ccBridge.sendPrompt` with a deadline: a page that navigates mid-call never gets cc's reply, so an answer later than `ms` is `TIMEOUT`. */
+/**
+ * `ccBridge.sendPrompt` with a deadline: a page that navigates mid-call never gets cc's reply, so an answer later than `ms`
+ * is `TIMEOUT`. Never rejects: a call that throws, rejects, or answers anything but `{ok: boolean}` is `SEND_FAILED`.
+ */
 export async function sendPromptWithin(sessionId: string, text: string, ms: number): Promise<BridgeResult> {
-  const send = bridge()?.sendPrompt;
-  if (typeof send !== 'function') return { ok: false, code: 'NO_BRIDGE' };
+  const b = bridge();
+  if (typeof b?.sendPrompt !== 'function') return { ok: false, code: 'NO_BRIDGE' };
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<BridgeResult>((resolve) => { timer = setTimeout(() => resolve({ ok: false, code: 'TIMEOUT' }), ms); });
   try {
-    return await Promise.race([send(sessionId, text), deadline]);
+    const r: unknown = await Promise.race([Promise.resolve().then(() => b.sendPrompt!(sessionId, text)), deadline]);
+    if (!r || typeof r !== 'object' || typeof (r as BridgeResult).ok !== 'boolean') return { ok: false, code: 'SEND_FAILED' };
+    const { ok, code } = r as BridgeResult;
+    return ok ? { ok: true } : { ok: false, code: typeof code === 'string' ? code : undefined };
+  } catch {
+    return { ok: false, code: 'SEND_FAILED' };
   } finally {
     clearTimeout(timer);
   }

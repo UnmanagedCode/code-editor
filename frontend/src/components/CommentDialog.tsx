@@ -68,14 +68,20 @@ export function CommentDialog({ request, onClose, onSent }: { request: CommentRe
     if (!canSend || !request || !target) return;
     setBusy(true);
     setError(null);
-    const text = buildCommentPrompt({
-      abs, range: request.selection.range, project: request.root.project, worktree: request.root.worktree,
-      comment, selection: request.selection.text, lang: request.lang, dirty: request.dirty,
-    });
-    const r = await sendPromptWithin(target.sessionId, text, SEND_PROMPT_TIMEOUT_MS);
-    setBusy(false);
-    if (r.ok) onSent(sessionLabel(target));
-    else setError(refusalText(r.code));
+    let result: { ok: boolean; code?: string };
+    try {
+      const text = buildCommentPrompt({
+        abs, range: request.selection.range, project: request.root.project, worktree: request.root.worktree,
+        comment, selection: request.selection.text, lang: request.lang, dirty: request.dirty,
+      });
+      result = await sendPromptWithin(target.sessionId, text, SEND_PROMPT_TIMEOUT_MS);
+    } catch {
+      result = { ok: false, code: 'SEND_FAILED' };
+    } finally {
+      setBusy(false);
+    }
+    if (result.ok) onSent(sessionLabel(target));
+    else setError(refusalText(result.code));
   };
 
   return (

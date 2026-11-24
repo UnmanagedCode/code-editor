@@ -7,14 +7,15 @@ A code-conductor (cc) plugin to browse, view, edit and search the files of any c
 - Open it from cc's plugin nav, or from a project's or worktree's ⋮ menu ("Edit files").
 - File tree, Monaco editor with tabs, Ctrl/Cmd+S save, create/rename/delete, search across files, Ctrl/Cmd+P quick open. Details: [docs/features.md](docs/features.md).
 - Saves are conditional: a file a worker changed since you opened it is a conflict (view diff / overwrite / reload), never silently overwritten.
-- Session links: a `file:line` link in a session's reply opens the file at the highlighted range, in the right project or worktree; select code and **Comment** to send a comment with a link back to a live session. Sessions write these links once a workspace convention line is added: [docs/features.md → Make sessions write links](docs/features.md#make-sessions-write-links).
+- Session links: a `file:line` link in a session's reply opens the file at the highlighted range, in the right project or worktree; select code and **Comment** to send a comment with a link back to a live session. The plugin's conductor convention teaches the conductor to write these links: [docs/features.md → Session link convention](docs/features.md#session-link-convention).
 
 ## Stack and layout
 
 Node ≥ 24, Express backend (`server.js`, `src/`), React 19 + Vite + Tailwind + radix-ui frontend (`frontend/`) with Monaco bundled locally.
 
 ```
-conductor.plugin.json   manifest (keepAlive, project + worktree menu items)
+conductor.plugin.json   manifest (keepAlive, project + worktree menu items, conductor convention)
+conventions/            convention fragments the manifest contributes
 server.js, src/         backend: http/ (security, static), cc/ (exec client), fs/ (ops.sh helper), routes/
 frontend/src/           editor/ (Monaco host), state/, components/
 tests/                  node --test, with a fake cc
@@ -28,9 +29,9 @@ All file I/O is `POST $CONDUCTOR_URL/api/exec` running one POSIX `sh` helper (`s
 
 - `npm install` builds `frontend/dist` (the `prepare` script). `npm start` listens on `127.0.0.1:$PORT` (default in `server.js`).
 - `npm test` (backend `node --test` + Vitest), `npm run typecheck`.
-- `CC_CHECKOUT=<code-conductor checkout> npm run test:cc-link` checks the deep-link encoding against cc's real link parser (not part of `npm test`).
+- `CC_CHECKOUT=<code-conductor checkout> npm run test:cc` checks the deep-link encoding, the convention fragment and the manifest against cc's real code (not part of `npm test`).
 - `CC_PROJECTS_ROOT=<projects root> npm run harness` runs the Playwright scenarios against a fake cc; screenshots land in `harness/playwright/out/`.
-- Caps and timeouts are named constants in `src/limits.js`.
+- Caps and timeouts are named constants: the backend's in `src/limits.js`, the UI-only ones in `frontend/src/lib/limits.ts`.
 
 ## Known limitations
 

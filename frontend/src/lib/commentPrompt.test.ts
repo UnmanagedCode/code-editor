@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseSearch } from '@/state/route';
-import { buildCommentPrompt, DIRTY_NOTE, escapeLabel, fenceFor, truncateSelection, type CommentInput } from './commentPrompt';
+import { buildCommentPrompt, DIRTY_NOTE, escapeInline, fenceFor, truncateSelection, type CommentInput } from './commentPrompt';
 
 const input = (over: Partial<CommentInput> = {}): CommentInput => ({
   abs: '/srv/app/src/app.ts', range: { start: 12, end: 18 }, project: 'app', worktree: 'w1',
@@ -43,10 +43,20 @@ describe('buildCommentPrompt', () => {
 
   // Invariant: path characters that are markdown syntax cannot break or restyle the label.
   it('escapes markdown punctuation in the label', () => {
-    expect(escapeLabel('/a/[b]*c_d`e<f>.ts:1-2')).toBe('/a/\\[b\\]\\*c\\_d\\`e\\<f\\>.ts:1-2');
-    expect(escapeLabel('/a\nb')).toBe('/a%0Ab');
+    expect(escapeInline('/a/[b]*c_d`e<f>.ts:1-2')).toBe('/a/\\[b\\]\\*c\\_d\\`e\\<f\\>.ts:1-2');
+    expect(escapeInline('/a\nb')).toBe('/a%0Ab');
     const first = buildCommentPrompt(input({ abs: '/srv/[x]/__init__.py' })).split('\n')[0];
     expect(first.startsWith('Comment on [/srv/\\[x\\]/\\_\\_init\\_\\_.py:12-18](')).toBe(true);
+  });
+
+  // Invariant: project and worktree names are untrusted: they cannot break the first line or inject markdown into the session.
+  it('escapes the project and worktree names', () => {
+    const p = buildCommentPrompt(input({ project: 'app\n\n[click](http://evil.example/)', worktree: 'w_*1*\r\n# hi' }));
+    const lines = p.split('\n');
+    expect(lines[0].endsWith('(project app%0A%0A\\[click\\]\\(http://evil.example/\\), worktree w\\_\\*1\\*%0D%0A\\# hi)')).toBe(true);
+    expect(lines[1]).toBe('');
+    expect(lines[2]).toBe('Why is this cached?');
+    expect(p.match(/\]\(/g)).toHaveLength(1);
   });
 
   // Invariant: the code fence is longer than any backtick run in the selection, so the selection cannot close it.

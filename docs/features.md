@@ -37,14 +37,12 @@ Select text in the editor and send a comment about it to a live cc session. The 
 - **Unavailable:** outside cc (no `window.ccBridge`) the button is disabled and the action only says "Open Code Editor inside cc to send comments"; likewise when cc reports no path for the project.
 - Session labels and the reference render as text only.
 
-## Make sessions write links
+## Session link convention
 
-Sessions write these links only when told to. After this version of Code Editor is installed on a cc that supports `cc.internal` deep links, add this line to **Settings → Conventions → Workspace** (it reaches every project's `CONVENTIONS.md` and the conductor's):
+The plugin teaches the conductor to write these links: `conductor.plugin.json` contributes the conductor convention **Code Editor links** (`code-editor/code-links`, text in `conventions/code-links.md`).
 
-```
-- **Cite code locations in replies as Code Editor links**, never in backticks or in files or commits: `[<path>:<line>](http://cc.internal/#plugin/code-editor/?ccPath=<absolute path>&ccLine=<n>&ccEndLine=<m>)`, `&ccEndLine` only for a range, percent-encoding path characters other than letters, digits and `/._-` — e.g. [src/app.ts:12-18](http://cc.internal/#plugin/code-editor/?ccPath=/srv/app/src/app.ts&ccLine=12&ccEndLine=18).
-```
-
-- Saving it regenerates each project's tracked `CONVENTIONS.md`; sessions commit that change on their next turn.
-- Remove the line if Code Editor is disabled or uninstalled: links then open cc's unavailable-plugin view.
-- On a cc without `cc.internal` deep links, such a link is an ordinary new-tab link to a host that resolves nowhere; do not add the line there.
+- **On by default** while the plugin is enabled; switch it off under **Settings → Conventions → Conductor**. Disabling the plugin drops it.
+- **Takes effect** on the next conductor spawn or context refresh.
+- **Two parts:** a one-sentence instruction with the link template, composed into the conductor's system prompt; the details (encoding, which path, ranges, link text, unmatched paths) as the skill `cc-conductor-code-editor:code-links`.
+- **Conductor only:** no project or workspace convention, so workers are not told to write links.
+- The link format itself is specified once, in [protocol → Deep links](protocol.md#deep-links).

@@ -67,7 +67,7 @@ cc's stable plugin deep-link form; cc frames `/plugins/code-editor/` + the part 
 | `/` | Safe raw; `%2F` also works. |
 | non-ASCII | Survives raw (the URL parser encodes it as UTF-8); encoding is also fine. |
 
-The table rows are pinned in `frontend/src/test/ccLinkFixtures.ts`, decoded by `state/ccLink.test.ts` and checked against cc's real `viewLinkHash` by `npm run test:cc-link` ([architecture → Tests](architecture.md#tests)).
+The table rows are pinned in `frontend/src/test/ccLinkFixtures.ts`, decoded by `state/ccLink.test.ts` and checked against cc's real `viewLinkHash` by `npm run test:cc` ([architecture → Tests](architecture.md#tests)). The conductor learns this form from the plugin's conductor convention ([features → Session link convention](features.md#session-link-convention)).
 
 **Resolution** (`placeForPath`, `frontend/src/lib/placeFor.ts`): candidates are every project and worktree `path` from `api/roots` (one trailing `/` stripped) that is a prefix of `ccPath` at a `/` boundary; the longest wins; equal-length ties go to the place equal to `ccBridge.session`'s `(project, worktree)`, else no match. The remainder must pass `relPathError` (`frontend/src/lib/paths.ts`, the backend's relative-path rules). No match → notice, the open root is left alone.
 
@@ -98,3 +98,4 @@ Selected text:
 - `GET /api/instances` (`sessionId`, `project`, `worktree.worktreeName`, `status`, `displayLabel`, `lastResponseAt`, `createdAt`).
 - Bridge (`window.ccBridge`, optional, `frontend/src/lib/ccBridge.ts`): `session` (for the tie rule and the default session) and `sendPrompt` (a deadline of `SEND_PROMPT_TIMEOUT_MS` turns a missing reply into `TIMEOUT`). cc's `navigate` arrives as `popstate`.
 - The `cc.internal` deep-link form above.
+- Manifest `conventions`: one `scope: "conductor"` entry (`code-links`, fragment `conventions/code-links.md` with a `<!-- cc:skill … -->` skill part), delivered by cc as conductor convention `code-editor/code-links` and skill `cc-conductor-code-editor:code-links`.

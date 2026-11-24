@@ -1,6 +1,6 @@
-// Gated (`CC_CHECKOUT=<code-conductor checkout> npm run test:cc-link`): cc's real viewLinkHash accepts exactly the hashes the
+// Gated (`CC_CHECKOUT=<code-conductor checkout> npm run test:cc`): cc's real viewLinkHash accepts exactly the hashes the
 // fixture table records, so the encoding Code Editor documents and emits is the one cc's transcript links honour.
-import { viewLinkHash } from 'cc-route'; // aliased to $CC_CHECKOUT/web/src/state/route.ts by vitest.cc-link.config.ts
+import { viewLinkHash } from 'cc-route'; // aliased to $CC_CHECKOUT/web/src/state/route.ts by vitest.cc.config.ts
 import { describe, expect, it } from 'vitest';
 import { CC_LINK_FIXTURES } from '../test/ccLinkFixtures';
 

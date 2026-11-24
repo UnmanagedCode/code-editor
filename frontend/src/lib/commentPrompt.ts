@@ -19,10 +19,11 @@ export type CommentInput = {
 export const DIRTY_NOTE = ' — the editor buffer has unsaved changes; line numbers refer to the buffer, not the file on disk';
 
 /**
- * A path as markdown link text: ASCII punctuation other than `/ . - :` is backslash-escaped (so `[`, `]`, `*`, `_` cannot end
- * the label or turn into emphasis), and control characters are percent-encoded so the label stays on one line.
+ * Untrusted text (a path, a project or worktree name) made inert inside one markdown line: ASCII punctuation other than
+ * `/ . - :` is backslash-escaped (so `[`, `]`, `*`, `_` cannot open a link or emphasis), and control characters are
+ * percent-encoded so it cannot start a new line or block.
  */
-export function escapeLabel(text: string): string {
+export function escapeInline(text: string): string {
   return text
     .replace(/[!-,;-@[-`{-~]/g, (c) => `\\${c}`)
     .replace(/[\x00-\x1f\x7f]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`);
@@ -53,8 +54,8 @@ export function truncateSelection(text: string, range: LineRange, max = MAX_COMM
 
 /** The prompt a comment sends: a clickable deep link to the selection, where it lives, the comment, then the selected text. */
 export function buildCommentPrompt(i: CommentInput): string {
-  const label = escapeLabel(`${i.abs}:${i.range.start}${i.range.end !== null ? `-${i.range.end}` : ''}`);
-  const where = `(project ${i.project}${i.worktree ? `, worktree ${i.worktree}` : ''})`;
+  const label = escapeInline(`${i.abs}:${i.range.start}${i.range.end !== null ? `-${i.range.end}` : ''}`);
+  const where = `(project ${escapeInline(i.project)}${i.worktree ? `, worktree ${escapeInline(i.worktree)}` : ''})`;
   const { text, marker } = truncateSelection(i.selection, i.range);
   const fence = fenceFor(text);
   return [
