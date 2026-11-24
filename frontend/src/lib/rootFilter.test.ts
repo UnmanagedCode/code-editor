@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { RootProject } from '@/lib/endpoints';
 import { groupKey, groupLabel, groupRoots, matchRoot } from './rootFilter';
 
-const p = (name: string, over: Partial<RootProject> = {}): RootProject => ({ name, workspace: null, system: 'local', remoteId: null, unreachable: null, degraded: null, worktrees: [], ...over });
+const p = (name: string, over: Partial<RootProject> = {}): RootProject => ({ name, workspace: null, system: 'local', remoteId: null, unreachable: null, degraded: null, path: null, worktrees: [], ...over });
 const PROJECTS = [
-  p('zed'), p('beta', { workspace: 'team' }), p('alpha', { workspace: 'team', worktrees: [{ name: 'wt1', branch: 'feat/login' }] }),
+  p('zed'), p('beta', { workspace: 'team' }), p('alpha', { workspace: 'team', worktrees: [{ name: 'wt1', branch: 'feat/login', path: null }] }),
   p('pp', { workspace: 'Acme' }), p('amber'),
 ];
 
 describe('matching is a case-insensitive substring', () => {
   const names = (filter: string, list: RootProject[]) => groupRoots(list, filter).flatMap((g) => g.projects.map((x) => x.project.name));
-  const MIXED = [p('Delta', { workspace: 'Ops', worktrees: [{ name: 'Feature-X', branch: 'Release/Two' }] }), p('alpha')];
+  const MIXED = [p('Delta', { workspace: 'Ops', worktrees: [{ name: 'Feature-X', branch: 'Release/Two', path: null }] }), p('alpha')];
 
   it('mixed-case data is found by lower-case terms, on name and workspace', () => {
     expect(names('delta', MIXED)).toEqual(['Delta']);
@@ -54,7 +54,7 @@ describe('groupRoots', () => {
   });
 
   it('a worktree hit on an unreachable or degraded project does not include it', () => {
-    const wts = [{ name: 'hidden', branch: null }];
+    const wts = [{ name: 'hidden', branch: null, path: null }];
     expect(matchRoot(p('a', { unreachable: 'down', worktrees: wts }), 'hidden').hit).toBe(false);
     expect(matchRoot(p('a', { degraded: 'bad', worktrees: wts }), 'hidden').hit).toBe(false);
   });

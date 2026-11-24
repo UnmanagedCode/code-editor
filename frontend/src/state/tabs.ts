@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { EditorHost, EditorModel } from '@/editor/EditorHost';
+import type { LineRange } from '@/lib/ccLink';
 import { isUnder, retarget } from '@/lib/paths';
 
 /** The disk version shown by "View diff": its text, the hash Overwrite must then send, and whether the file is gone. */
@@ -23,8 +24,8 @@ export type Tab = {
   limitBytes: number;
   conflict: { currentHash: string | null } | null;
   diff: DiskView | null;
-  /** A 1-based line to reveal once the editor mounts (from a search result). */
-  reveal: number | null;
+  /** Lines to reveal and highlight once the editor shows (from a search result or a deep link). A new object reveals again. */
+  reveal: LineRange | null;
 };
 
 export type TabsState = { tabs: Tab[]; active: string | null };

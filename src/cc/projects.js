@@ -1,7 +1,12 @@
 import { Refusal } from '../refusals.js';
 import { ccFetch, parseJson } from './fetch.js';
 
-/** The roots the picker offers: every cc project with its worktrees, from `GET /api/projects`. */
+const pathOrNull = (v) => (typeof v === 'string' && v ? v : null);
+
+/**
+ * The roots the picker offers: every cc project with its worktrees, from `GET /api/projects`. `path` is the root's absolute
+ * path on its own System (null when cc reports none); the UI matches a deep link's absolute path against it.
+ */
 export async function listRoots() {
   const { res, text } = await ccFetch('/api/projects', {}, { timeoutMs: 15_000, retry: true });
   const rows = parseJson(text);
@@ -13,7 +18,10 @@ export async function listRoots() {
     remoteId: typeof p.remoteId === 'string' ? p.remoteId : null,
     unreachable: typeof p.systemUnreachable === 'string' ? p.systemUnreachable : null,
     degraded: typeof p.degraded === 'string' ? p.degraded : (p.path ? null : 'no path'),
-    worktrees: (Array.isArray(p.worktrees) ? p.worktrees : []).map((w) => ({ name: String(w.worktreeName), branch: typeof w.branch === 'string' ? w.branch : null })),
+    path: pathOrNull(p.path),
+    worktrees: (Array.isArray(p.worktrees) ? p.worktrees : []).map((w) => ({
+      name: String(w.worktreeName), branch: typeof w.branch === 'string' ? w.branch : null, path: pathOrNull(w.worktreePath),
+    })),
   }));
   projects.sort((a, b) => a.name.localeCompare(b.name));
   return { projects };

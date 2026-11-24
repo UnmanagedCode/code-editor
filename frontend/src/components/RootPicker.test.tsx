@@ -5,12 +5,12 @@ import { ApiError } from '@/lib/api';
 import type { RootProject } from '@/lib/endpoints';
 import { RootBrowser, RootPicker, type RootChoice } from './RootPicker';
 
-const project = (name: string, over: Partial<RootProject> = {}): RootProject => ({ name, workspace: null, system: 'local', remoteId: null, unreachable: null, degraded: null, worktrees: [], ...over });
+const project = (name: string, over: Partial<RootProject> = {}): RootProject => ({ name, workspace: null, system: 'local', remoteId: null, unreachable: null, degraded: null, path: null, worktrees: [], ...over });
 const PROJECTS = [
-  project('app', { workspace: 'team', worktrees: [{ name: 'wt1', branch: 'feat/one' }, { name: 'wt2', branch: null }] }),
+  project('app', { workspace: 'team', worktrees: [{ name: 'wt1', branch: 'feat/one', path: null }, { name: 'wt2', branch: null, path: null }] }),
   project('box', { workspace: 'team', system: 'docker', remoteId: 'ssh1' }),
   project('solo'),
-  project('down', { unreachable: 'provider died', worktrees: [{ name: 'hidden', branch: null }] }),
+  project('down', { unreachable: 'provider died', worktrees: [{ name: 'hidden', branch: null, path: null }] }),
   project('bad', { degraded: 'record unreadable' }),
 ];
 const ROOT: RootChoice = { project: 'solo', worktree: null };

@@ -4,7 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
-// A fake cc REST host: GET /api/projects, GET /api/projects/:name/worktrees and POST /api/exec, the exec request
+// A fake cc REST host: GET /api/projects, GET /api/projects/:name/worktrees, GET /api/instances and POST /api/exec, the exec request
 // validated as strictly as cc's src/hostExec.ts. Exec runs argv for real on this machine in the resolved directory.
 //
 // A project with `system !== 'local'` is emulated the way a provider differs from local: its reported `path` does not
@@ -173,13 +173,13 @@ function run(state, spec, req, res, body) {
 /**
  * Starts the fake and points CONDUCTOR_URL at it; `close()` restores it.
  * `projects`: {name: {dir, workspace?, system?, remoteId?, worktrees?: {name: dir}, systemUnreachable?, degraded?, hideTools?: [names]}}.
- * Knobs on the returned object: `state.execCalls`, `state.violations` (any form-B or shell use), `state.disconnects`,
+ * Knobs on the returned object: `state.instances` (the rows GET /api/instances answers), `state.instancesHook()` → `{status, body}` | `'reset'`, `state.execCalls`, `state.violations` (any form-B or shell use), `state.disconnects`,
  * `state.execHook(body)` → `{status, body}` | `{status, raw}` | `'hold'` | `'reset'` | undefined, `systemDown(project, down)`.
  */
 export async function fakeCc({ projects = {} } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ce-fakecc-'));
   const state = {
-    projects, home, execCalls: [], violations: [], disconnects: [], execHook: null,
+    projects, home, execCalls: [], violations: [], disconnects: [], execHook: null, instances: [], instancesHook: null,
     down: new Set(), children: new Set(), pathDirs: new Map(), projectsRequests: 0, waiters: [],
   };
   const sockets = new Set();
@@ -231,8 +231,12 @@ export async function fakeCc({ projects = {} } = {}) {
         system: p.system ?? 'local', remoteId: p.remoteId ?? null,
         systemUnreachable: p.systemUnreachable ?? null, gitRefusal: null,
         ...(p.degraded ? { degraded: p.degraded } : {}),
-        worktrees: Object.entries(p.worktrees ?? {}).map(([w]) => ({ worktreeName: w, branch: `code-conductor/${w}` })),
+        worktrees: Object.entries(p.worktrees ?? {}).map(([w, dir]) => ({ worktreeName: w, branch: `code-conductor/${w}`, worktreePath: isRemote(p) ? `/srv/cc-remote/${name}/.worktrees/${w}` : dir })),
       })));
+    }
+    if (req.method === 'GET' && url.pathname === '/api/instances') {
+      if (state.instancesHook) { const h = state.instancesHook(); if (h === 'reset') return req.socket.destroy(); if (h) return send(res, h.body, h.status); }
+      return send(res, state.instances);
     }
     const m = req.method === 'GET' && url.pathname.match(/^\/api\/projects\/([^/]+)\/worktrees$/);
     if (m) {

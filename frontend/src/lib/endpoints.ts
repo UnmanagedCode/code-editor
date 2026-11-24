@@ -9,9 +9,15 @@ export type RootProject = {
   remoteId: string | null;
   unreachable: string | null;
   degraded: string | null;
-  worktrees: { name: string; branch: string | null }[];
+  /** The root's absolute path on its own System; null when cc reports none. */
+  path: string | null;
+  worktrees: { name: string; branch: string | null; path: string | null }[];
 };
 export type RootsResult = { projects: RootProject[] };
+
+/** A live cc session the comment dialog can send to; `label` is untrusted text. `lastActive` is epoch ms. */
+export type Session = { sessionId: string; project: string; worktree: string | null; label: string; status: string; lastActive: number };
+export type SessionsResult = { sessions: Session[] };
 
 export type EntryKind = 'file' | 'dir' | 'symlink' | 'other';
 export type LinkTarget = 'file' | 'dir' | 'other' | 'outside' | 'git' | 'broken';
@@ -53,4 +59,5 @@ export const endpoints = {
   search: (t: Target, q: string, opts: { regex: boolean; matchCase: boolean }, signal?: AbortSignal) =>
     api<SearchResult>(`api/search?${targetParams(t, { q, regex: opts.regex ? '1' : '0', case: opts.matchCase ? '1' : '0' })}`, { signal }),
   files: (t: Target, signal?: AbortSignal) => api<FilesResult>(`api/files?${targetParams(t, {})}`, { signal }),
+  sessions: (signal?: AbortSignal) => api<SessionsResult>('api/sessions', { signal }),
 };

@@ -60,3 +60,8 @@
   -webkit-touch-callout: none;
   user-select: none;
 }
+
+/* The lines a deep link or search result revealed, until the next edit or reveal (editor/monaco.ts). */
+.monaco-editor .cc-ref-highlight {
+  background: color-mix(in oklch, var(--info) 22%, transparent);
+}

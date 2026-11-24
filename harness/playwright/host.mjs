@@ -9,16 +9,24 @@ const checkout = process.env.CC_CHECKOUT || path.join(process.env.CC_PROJECTS_RO
 const BRIDGE = path.join(checkout, 'web/src/features/views/pluginBridge.js');
 const TOKENS = path.join(checkout, 'web/src/themeTokens.css');
 
-// Like cc, the host remembers the route the plugin reports and reopens the frame there after a reload.
-const PAGE = (src, explicit) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>cc host</title>
+// Like cc, the host remembers the route the plugin reports and reopens the frame there after a reload. It also plays cc's
+// session-awareness side: it announces SESSION as the active session once the bridge is ready, and answers every sendPrompt
+// with ok, recording it in window.__prompts.
+export const SESSION = { sessionId: 's-wt1', project: 'app', worktree: 'wt1' };
+const PAGE = (src, explicit) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>cc host</title>
 <link rel="stylesheet" href="/pluginTheme.css"><style>html,body{margin:0;height:100%;background:var(--background)}iframe{border:0;width:100%;height:100%}</style></head>
 <body><iframe id="plugin" title="plugin"></iframe>
 <script>
   var src = ${JSON.stringify(src)};
   var saved = sessionStorage.getItem('plugin-route');
   document.getElementById('plugin').src = saved && !${explicit} ? '/plugins/code-editor' + saved : src;
+  window.__prompts = [];
   window.addEventListener('message', function (e) {
-    if (e.origin === location.origin && e.data && e.data.cc === 1 && e.data.type === 'route') sessionStorage.setItem('plugin-route', e.data.path);
+    if (e.origin !== location.origin || !e.data || e.data.cc !== 1) return;
+    var reply = function (m) { e.source.postMessage(Object.assign({ cc: 1 }, m), location.origin); };
+    if (e.data.type === 'route') sessionStorage.setItem('plugin-route', e.data.path);
+    if (e.data.type === 'ready') reply({ type: 'session', session: ${JSON.stringify(SESSION)} });
+    if (e.data.type === 'sendPrompt') { window.__prompts.push({ sessionId: e.data.sessionId, text: e.data.text }); reply({ type: 'result', id: e.data.id, ok: true }); }
   });
 </script></body></html>`;
 

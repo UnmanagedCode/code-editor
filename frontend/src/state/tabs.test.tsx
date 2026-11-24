@@ -24,8 +24,8 @@ describe('tabsReducer', () => {
 
   it('re-opening with a line sets the line to reveal; without one it leaves it', () => {
     let s = open(EMPTY_TABS, 'a');
-    s = tabsReducer(s, { type: 'open', tab: tab('a', { reveal: 7 }) });
-    expect(s.tabs[0].reveal).toBe(7);
+    s = tabsReducer(s, { type: 'open', tab: tab('a', { reveal: { start: 7, end: null } }) });
+    expect(s.tabs[0].reveal).toEqual({ start: 7, end: null });
     s = tabsReducer(s, { type: 'revealed', id: ids.get('a')! });
     expect(s.tabs[0].reveal).toBeNull();
   });

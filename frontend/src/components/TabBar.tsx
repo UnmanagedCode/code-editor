@@ -1,11 +1,13 @@
-import { SaveIcon, XIcon } from 'lucide-react';
+import { MessageSquarePlusIcon, SaveIcon, XIcon } from 'lucide-react';
 import { isDirty, type Tab } from '@/state/tabs';
 import { Button } from '@/components/ui/button';
 import { leaf } from '@/lib/paths';
 import { cn } from '@/lib/utils';
 
-export function TabBar({ tabs, active, onActivate, onClose, onSave }: {
+export function TabBar({ tabs, active, onActivate, onClose, onSave, comment }: {
   tabs: Tab[]; active: string | null; onActivate: (path: string) => void; onClose: (path: string) => void; onSave: () => void;
+  /** The "Comment on selection" button, shown while the active editor has a non-empty selection; `blocked` disables it with that reason. */
+  comment: { onComment: () => void; blocked: string | null } | null;
 }) {
   const current = tabs.find((t) => t.path === active);
   return (
@@ -27,6 +29,11 @@ export function TabBar({ tabs, active, onActivate, onClose, onSave }: {
           );
         })}
       </div>
+      {comment && (
+        <Button type="button" variant="ghost" size="sm" className="m-1 mr-0 shrink-0" disabled={comment.blocked !== null} title={comment.blocked ?? 'Comment on selection (Ctrl/Cmd+K Ctrl/Cmd+M)'} onClick={comment.onComment} aria-label="Comment on selection">
+          <MessageSquarePlusIcon /> <span className="hidden sm:inline">Comment</span>
+        </Button>
+      )}
       <Button type="button" variant="ghost" size="sm" className="m-1 shrink-0" disabled={!current || !isDirty(current)} onClick={onSave} aria-label="Save">
         <SaveIcon /> <span className="hidden sm:inline">Save</span>
       </Button>

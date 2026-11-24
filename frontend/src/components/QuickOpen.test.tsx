@@ -10,7 +10,7 @@ const FILES = { 'src/main.ts': 'm', 'src/lib/util.ts': 'u', 'README.md': 'r', 'd
 
 async function setup(files: Record<string, string> = FILES) {
   const backend = installBackend({ files });
-  const ctx = renderWithHost(<Workspace target={target} initialFile={null} onFileChange={() => {}} />);
+  const ctx = renderWithHost(<Workspace target={target} rootPath="/srv/app" initialFile={null} reveal={null} onRevealHandled={() => {}} onFileChange={() => {}} />);
   await screen.findAllByRole('treeitem');
   return { backend, ...ctx };
 }
@@ -113,7 +113,7 @@ describe('QuickOpen', () => {
   it('says when the list was cut off', async () => {
     installBackend({ files: FILES });
     vi.mocked(endpoints.files).mockImplementation(async () => ({ engine: 'rg', files: ['a.ts'], truncated: true, limit: 1 }));
-    renderWithHost(<Workspace target={target} initialFile={null} onFileChange={() => {}} />);
+    renderWithHost(<Workspace target={target} rootPath="/srv/app" initialFile={null} reveal={null} onRevealHandled={() => {}} onFileChange={() => {}} />);
     await screen.findByRole('treeitem', { name: /README\.md/ });
     ctrlP();
     expect(await screen.findByText(/Only the first 1 files are listed/)).toBeTruthy();

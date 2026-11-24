@@ -1,7 +1,9 @@
 import { FilesIcon, FileSearchIcon, RefreshCwIcon, SaveIcon, SearchIcon } from 'lucide-react';
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { applyMonacoTheme } from '@/editor/monacoTheme';
-import { useEditorHost } from '@/editor/EditorHost';
+import { useEditorHost, type EditorHandle } from '@/editor/EditorHost';
+import { sendUnavailableReason } from '@/lib/ccBridge';
+import type { LineRange } from '@/lib/ccLink';
 import { endpoints, type Target } from '@/lib/endpoints';
 import { useGlobalShortcuts } from '@/lib/keys';
 import { useNarrow } from '@/lib/media';
@@ -15,6 +17,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CloseTabDialog } from './CloseTabDialog';
+import { CommentDialog, type CommentRequest } from './CommentDialog';
 import { ConflictBar } from './ConflictBar';
 import { DeleteDialog, type DeleteRequest } from './DeleteDialog';
 import { DiffPane } from './DiffPane';
@@ -30,9 +33,20 @@ import { rootLabel } from './RootPicker';
 
 /** What the App needs from the open root: whether it has unsaved buffers, and a way to save them all. */
 export type WorkspaceHandle = { dirtyPaths(): string[]; saveAll(): Promise<boolean> };
+/** A deep link into this root: open `file` and reveal `range`. A new `seq` is a new request, even for the same file and lines. */
+export type RevealRequest = { file: string; range: LineRange | null; seq: number };
 
-export function Workspace({ target, initialFile, onFileChange, ref }: {
-  target: Target; initialFile: string | null; onFileChange: (path: string | null) => void; ref?: Ref<WorkspaceHandle>;
+const STATUS_MS = 4000;
+
+export function Workspace({ target, rootPath, initialFile, reveal, onRevealHandled, onFileChange, ref }: {
+  target: Target;
+  /** The root's absolute path on its System (null when cc reports none): comments link to files under it. */
+  rootPath: string | null;
+  initialFile: string | null;
+  reveal: RevealRequest | null;
+  onRevealHandled: () => void;
+  onFileChange: (path: string | null) => void;
+  ref?: Ref<WorkspaceHandle>;
 }) {
   const host = useEditorHost();
   const narrow = useNarrow();
@@ -51,6 +65,10 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const listGeneration = useRef(0);
+  const editor = useRef<EditorHandle | null>(null);
+  const [hasSelection, setHasSelection] = useState(false);
+  const [commentRequest, setCommentRequest] = useState<CommentRequest | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => applyMonacoTheme(host, theme === 'dark'), [host, theme]);
 
@@ -64,6 +82,20 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
   useEffect(() => { onFileChange(active?.path ?? null); }, [active?.path, onFileChange]);
   const initial = useRef(initialFile);
   useEffect(() => { if (initial.current) void openFile(initial.current); }, [openFile]);
+  // A deep link: declared after the initial open, so a link naming the initial file adds its range to that open.
+  useEffect(() => {
+    if (!reveal) return;
+    setSheet(null);
+    void openFile(reveal.file, reveal.range);
+    onRevealHandled();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal?.seq]);
+
+  useEffect(() => {
+    if (!status) return;
+    const t = setTimeout(() => setStatus(null), STATUS_MS);
+    return () => clearTimeout(t);
+  }, [status]);
 
   useImperativeHandle(ref, () => ({
     dirtyPaths: () => tabsRef.current.filter(isDirty).map((t) => t.path),
@@ -99,8 +131,17 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
 
   const openFromSide = useCallback((path: string, line: number | null = null) => {
     setSheet(null);
-    void openFile(path, line);
+    void openFile(path, line === null ? null : { start: line, end: null });
   }, [openFile]);
+
+  const onHandle = useCallback((h: EditorHandle | null, has: boolean) => { editor.current = h; setHasSelection(h !== null && has); }, []);
+  const commentBlocked = sendUnavailableReason() ?? (rootPath ? null : 'cc reports no path for this project, so a comment cannot link to the file');
+  const startComment = () => {
+    if (commentBlocked) { setStatus(commentBlocked); return; }
+    const selection = editor.current?.getSelection();
+    if (!active || !selection || !rootPath) return;
+    setCommentRequest({ root: target, rootPath, path: active.path, selection, dirty: isDirty(active), lang: host.languageFor(active.path) });
+  };
 
   const requestClose = (path: string) => {
     const t = tabs.find((x) => x.path === path);
@@ -170,7 +211,13 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
   const busy = active ? files.busy.has(active.id) : false;
   const editorArea = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      {tabs.length > 0 && <TabBar tabs={tabs} active={active?.path ?? null} onActivate={(p) => tabsApi.dispatch({ type: 'activate', path: p })} onClose={requestClose} onSave={saveActive} />}
+      {tabs.length > 0 && (
+        <TabBar
+          tabs={tabs} active={active?.path ?? null} onActivate={(p) => tabsApi.dispatch({ type: 'activate', path: p })} onClose={requestClose} onSave={saveActive}
+          comment={hasSelection && active && !active.diff ? { onComment: startComment, blocked: commentBlocked } : null}
+        />
+      )}
+      {status && <p role="status" className="border-b bg-card px-3 py-1.5 text-xs">{status}</p>}
       {files.error && <div className="p-2"><RefusalAlert title="Something went wrong" error={files.error} /></div>}
       {active?.conflict && (
         <ConflictBar
@@ -185,7 +232,7 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
       <div className="min-h-0 flex-1">
         {active ? (
           active.diff ? <DiffPane key={`${active.path}:diff`} tab={active} narrow={narrow} onSave={saveActive} onQuickOpen={openQuick} />
-            : <EditorPane key={active.path} tab={active} narrow={narrow} onSave={saveActive} onQuickOpen={openQuick} onRevealed={() => tabsApi.dispatch({ type: 'revealed', id: active.id })} />
+            : <EditorPane key={active.path} tab={active} narrow={narrow} onSave={saveActive} onQuickOpen={openQuick} onRevealed={() => tabsApi.dispatch({ type: 'revealed', id: active.id })} onComment={startComment} onHandle={onHandle} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
             {narrow
@@ -245,6 +292,7 @@ export function Workspace({ target, initialFile, onFileChange, ref }: {
       <QuickOpen open={quickOpen} list={fileList} loading={listLoading} error={listError} onClose={() => setQuickOpen(false)} onOpenFile={(p) => void openFile(p)} />
       <NameDialog request={nameRequest} onSubmit={submitName} onClose={() => setNameRequest(null)} />
       <DeleteDialog request={deleteRequest} onConfirm={confirmDelete} onClose={() => setDeleteRequest(null)} />
+      <CommentDialog request={commentRequest} onClose={() => setCommentRequest(null)} onSent={(label) => { setCommentRequest(null); setStatus(`Sent to ${label}`); }} />
       <CloseTabDialog path={closing} onSave={() => void closeSave()} onDiscard={() => { tabsApi.drop(closing!); setClosing(null); }} onCancel={() => setClosing(null)} />
     </div>
   );
