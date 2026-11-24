@@ -7,7 +7,43 @@
 - **Save.** Ctrl/Cmd+S or the Save button. Closing a dirty tab asks Save / Discard / Cancel; `beforeunload` guards reload while any buffer is dirty.
 - **Conflict.** A save refused because the file changed (or was deleted) on disk shows a bar: **View diff** (disk read-only vs live buffer), **Overwrite** (re-saves against the disk version you were shown; a further change conflicts again), **Reload** (replaces the buffer).
 - **File operations.** New file/folder, Rename, Delete via right-click / long-press (context menu) or the per-row ⋮ button. Names are validated locally (no `/`, `.`, `..`, `.git`). Existing names are reported inline; nothing is overwritten. Open tabs follow renames and close on delete; Delete lists dirty tabs it would discard.
-- **Search.** Query with Regex and Match case toggles, results grouped by file, capped (`MAX_SEARCH_RESULTS`) with a refine notice, engine label (`rg` or `git grep`). A result opens the file at its line.
+- **Search.** Query with Regex and Match case toggles, results grouped by file, capped (`MAX_SEARCH_RESULTS`) with a refine notice, engine label (`rg` or `git grep`). A result opens the file at its line, highlighted.
 - **Quick open.** Ctrl/Cmd+P or button; fuzzy match over the project's file list (ignore rules applied, capped by `MAX_QUICKOPEN_FILES`).
 - **Phone layout** (below Tailwind `md`). Files and Search open as sheets; icon buttons for Files, Search, Quick open, Save; per-row ⋮ always visible on touch; long-press opens the row menu; Monaco wraps lines, no minimap.
 - **Unreachable System.** A listing failure (`SYSTEM_UNREACHABLE`, unknown project/worktree, cc unavailable) replaces the tree with an alert naming the root and a Retry.
+
+## Opening a file from a session link
+
+A link of the form in [protocol → Deep links](protocol.md#deep-links) in a session's reply opens Code Editor on that file, scrolled to the line or range, with the lines highlighted until the next edit or reveal.
+
+- **Where it opens** is cc's rule: in the dock when a plugin is docked beside the session, else in the full plugin view in the same tab (Back returns to the conversation); a middle-click opens a new tab.
+- **Which root:** the project or worktree whose path is the longest prefix of the link's absolute path, across every cc project and worktree. A worktree nested under its project's tree wins over the project, so a conductor's link into a worker's worktree opens in that worktree. Two roots with the identical path (projects on different Systems) resolve to cc's active session's place; otherwise the link does not resolve.
+- **The open root** stays open: a link into it opens or activates the tab without reloading; other tabs and unsaved buffers stay. Following the same link again re-reveals.
+- **Another root** goes through the root switch, so unsaved buffers ask Save all / Discard / Cancel first; Cancel drops the link.
+- **No root contains the path** (or the path is not a clean absolute path): a text notice `No project contains <path>`; the open root is left alone. A file that does not exist shows the not-found refusal.
+- **Standalone** (outside cc), a pasted `…/?ccPath=…&ccLine=…` URL opens and highlights the same way.
+
+## Comment on selection
+
+Select text in the editor and send a comment about it to a live cc session. The prompt cites the selection as a deep link, so the reference is clickable in the session's transcript.
+
+- **Entry points:** "Comment on selection…" in the editor's context menu (keybinding Ctrl/Cmd+K Ctrl/Cmd+M), and a **Comment** button in the tab bar while the active tab has a non-empty selection (the touch path).
+- **Dialog:** the reference (`<absolute path>:<start>[-<end>]`), a comment box (capped at `MAX_COMMENT_CHARS`, `frontend/src/lib/limits.ts`), a **Send to** picker of every live session (`label · project[ / worktree]`), Send / Cancel. Send needs a session and a non-blank comment.
+- **Default session:** cc's active session when it works in the open root; else the most recently active live session in the open root; else none.
+- **Sent:** the dialog closes and the tab bar shows `Sent to <session>` for a few seconds.
+- **Refused:** the dialog and the comment stay, with a message per cc result code (`SESSION_NOT_READY`, `SESSION_NOT_LIVE`, `SESSION_UNKNOWN`, `VIEW_ONLY`, `SEND_FAILED`), or a timeout notice when cc does not answer within `SEND_PROMPT_TIMEOUT_MS` (the comment may then have been sent).
+- **Unsaved buffer:** the prompt notes that its line numbers refer to the buffer, not the file on disk.
+- **Lines:** the selection's first to last line; a selection ending at column 1 does not count that last line.
+- **Unavailable:** outside cc (no `window.ccBridge`) the button is disabled and the action only says "Open Code Editor inside cc to send comments"; likewise when cc reports no path for the project.
+- Session labels and the reference render as text only.
+
+## Session link convention
+
+The plugin teaches the conductor to write these links: `conductor.plugin.json` contributes the conductor convention **Code Editor links** (`code-editor/code-links`, text in `conventions/code-links.md`).
+
+- **On by default** while the plugin is enabled; switch it off under **Settings → Conventions → Conductor**. Disabling the plugin drops it.
+- **Needs a cc whose transcript links open `#plugin/code-editor/?…` deep links** (cc's `viewLinkHash`). On an older cc, switch the convention off under Settings → Conventions → Conductor, or the conductor writes dead links.
+- **Takes effect** on the next conductor spawn or context refresh.
+- **Two parts:** a one-sentence instruction with the link template, composed into the conductor's system prompt; the details (encoding, which path, ranges, link text, unmatched paths) as the skill `cc-conductor-code-editor:code-links`.
+- **Conductor only:** no project or workspace convention, so workers are not told to write links.
+- The link format is specified in [protocol → Deep links](protocol.md#deep-links). The convention's skill restates its encoding for the model; `frontend/src/lib/codeLinksConvention.test.ts` keeps the two in step with `encodeCcPath`.

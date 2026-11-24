@@ -7,7 +7,7 @@ import { renderWithHost } from '@/test/render';
 import { Workspace } from './Workspace';
 
 const target = { project: 'app', worktree: null };
-const mount = () => renderWithHost(<Workspace target={target} initialFile={null} onFileChange={() => {}} />);
+const mount = () => renderWithHost(<Workspace target={target} rootPath="/srv/app" initialFile={null} reveal={null} onRevealHandled={() => {}} onFileChange={() => {}} />);
 const FILES = { 'README.md': 'x', 'src/main.ts': 'y', 'src/lib/util.ts': 'z', 'ignored.log': 'i', 'build/out.js': 'o' };
 
 describe('refresh', () => {

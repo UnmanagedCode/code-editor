@@ -1,4 +1,4 @@
-import type { DiffHandle, DiffOptions, EditorHandle, EditorHost, EditorModel, MountOptions, ThemeDefinition } from '@/editor/EditorHost';
+import type { DiffHandle, DiffOptions, EditorHandle, EditorHost, EditorModel, MountOptions, Selection, ThemeDefinition } from '@/editor/EditorHost';
 
 export class FakeModel implements EditorModel {
   value: string;
@@ -20,7 +20,12 @@ export class FakeModel implements EditorModel {
   private fire() { for (const l of [...this.listeners]) l(); }
 }
 
-export type FakeMount = { element: HTMLElement; model: FakeModel; options: MountOptions; revealed: number[]; disposed: boolean };
+export type FakeMount = {
+  element: HTMLElement; model: FakeModel; options: MountOptions; revealed: { start: number; end: number | null }[]; disposed: boolean;
+  /** What `getSelection()` answers; `select()` sets it and fires `onSelectionChange` like a user selecting. */
+  selection: Selection | null;
+  select(s: Selection | null): void;
+};
 export type FakeDiff = { element: HTMLElement; diskText: string; live: FakeModel; path: string; options: DiffOptions; disposed: boolean };
 
 const LANGS: Record<string, string> = { ts: 'typescript', js: 'javascript', md: 'markdown', json: 'json', txt: 'plaintext' };
@@ -35,10 +40,18 @@ export function makeFakeHost() {
   const host: EditorHost = {
     createModel(path, text) { const m = new FakeModel(path, text, languageFor(path)); models.push(m); return m; },
     mount(element, model, options): EditorHandle {
-      const mount: FakeMount = { element, model: model as FakeModel, options, revealed: [], disposed: false };
+      const mount: FakeMount = {
+        element, model: model as FakeModel, options, revealed: [], disposed: false, selection: null,
+        select(s) { mount.selection = s; options.onSelectionChange(s !== null); },
+      };
       mounts.push(mount);
       element.dataset.mounted = (model as FakeModel).path;
-      return { focus() {}, revealLine(l) { mount.revealed.push(l); }, dispose() { mount.disposed = true; } };
+      return {
+        focus() {},
+        revealRange(start, end) { mount.revealed.push({ start, end }); },
+        getSelection: () => mount.selection,
+        dispose() { mount.disposed = true; },
+      };
     },
     mountDiff(element, diskText, live, o): DiffHandle {
       const diff: FakeDiff = { element, diskText, live: live as FakeModel, path: o.path, options: o, disposed: false };

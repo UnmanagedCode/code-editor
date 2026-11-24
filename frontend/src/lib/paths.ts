@@ -23,3 +23,15 @@ export function leafNameError(name: string): string | null {
   if (name.includes('\0')) return 'A name cannot contain NUL.';
   return null;
 }
+
+/** Why `path` is not a project-relative file path the backend accepts (`normalizeRel` in src/fs/paths.js), or null when it is. */
+export function relPathError(path: string): string | null {
+  if (path === '') return 'empty path';
+  if (path.startsWith('/')) return 'absolute path';
+  if (path.includes('\0')) return 'NUL in path';
+  for (const seg of path.split('/')) {
+    if (seg === '' || seg === '.' || seg === '..') return `"${seg}" segment`;
+    if (seg.toLowerCase() === '.git') return '.git segment';
+  }
+  return null;
+}

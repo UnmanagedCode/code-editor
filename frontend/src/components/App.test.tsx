@@ -5,8 +5,8 @@ import { installBackend } from '@/test/fakeBackend';
 import { renderWithHost } from '@/test/render';
 import { App } from '../App';
 
-const project = (name: string, over: Partial<RootProject> = {}): RootProject => ({ name, workspace: null, system: 'local', remoteId: null, unreachable: null, degraded: null, worktrees: [], ...over });
-const PROJECTS = [project('app', { worktrees: [{ name: 'w1', branch: 'code-conductor/w1' }] }), project('other'), project('box', { system: 'docker', remoteId: 'ssh1' }), project('down', { unreachable: 'provider died' })];
+const project = (name: string, over: Partial<RootProject> = {}): RootProject => ({ name, workspace: null, system: 'local', remoteId: null, unreachable: null, degraded: null, path: null, worktrees: [], ...over });
+const PROJECTS = [project('app', { worktrees: [{ name: 'w1', branch: 'code-conductor/w1', path: null }] }), project('other'), project('box', { system: 'docker', remoteId: 'ssh1' }), project('down', { unreachable: 'provider died' })];
 const FILES = { 'a.txt': 'alpha', 'b.txt': 'beta' };
 
 function start(search = '') {

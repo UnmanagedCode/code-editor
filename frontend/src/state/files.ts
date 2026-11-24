@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { EditorHost } from '@/editor/EditorHost';
 import { ApiError } from '@/lib/api';
+import type { LineRange } from '@/lib/ccLink';
 import { endpoints, type FileResult, type Target } from '@/lib/endpoints';
 import { isUnder } from '@/lib/paths';
 import { isDirty, newTabId, type Tab, type TabsAction } from './tabs';
@@ -32,14 +33,15 @@ export function useFileActions({ target, host, tabs, onOpened }: { target: Targe
   const [busy, setBusy] = useState<Set<number>>(new Set());
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
-  const opening = useRef(new Set<string>());
+  /** Paths being read, with the range to reveal once open: a second open of a file still loading updates it. */
+  const opening = useRef(new Map<string, LineRange | null>());
   const queues = useRef(new Map<number, Promise<unknown>>());
 
   const markBusy = (id: number, on: boolean) => setBusy((s) => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; });
   const byPath = (path: string) => tabsRef.current.getTabs().find((t) => t.path === path);
   const byId = (id: number) => tabsRef.current.getTabs().find((t) => t.id === id);
 
-  const tabFrom = (path: string, f: FileResult, reveal: number | null): Tab => {
+  const tabFrom = (path: string, f: FileResult, reveal: LineRange | null): Tab => {
     const { bom, text } = splitBom(f.content ?? '');
     const model = f.kind === 'text' ? host.createModel(path, text) : null;
     return {
@@ -57,17 +59,17 @@ export function useFileActions({ target, host, tabs, onOpened }: { target: Targe
     return next;
   };
 
-  /** Opens `path` in a tab (activating it when already open), optionally revealing a 1-based line. */
-  const openFile = useCallback(async (path: string, line: number | null = null) => {
+  /** Opens `path` in a tab (activating it when already open), optionally revealing a range of 1-based lines. */
+  const openFile = useCallback(async (path: string, range: LineRange | null = null) => {
     setError(null);
     const existing = byPath(path);
-    if (existing) { tabsRef.current.dispatch({ type: 'open', tab: { ...existing, reveal: line } }); onOpened(path); return; }
-    if (opening.current.has(path)) return;
-    opening.current.add(path);
+    if (existing) { tabsRef.current.dispatch({ type: 'open', tab: { ...existing, reveal: range } }); onOpened(path); return; }
+    if (opening.current.has(path)) { if (range) opening.current.set(path, range); return; }
+    opening.current.set(path, range);
     try {
       const f = await endpoints.read(target, path);
       if (byPath(path)) return;
-      tabsRef.current.add(tabFrom(path, f, line));
+      tabsRef.current.add(tabFrom(path, f, opening.current.get(path) ?? null));
       onOpened(path);
     } catch (e) {
       setError(asApiError(e));

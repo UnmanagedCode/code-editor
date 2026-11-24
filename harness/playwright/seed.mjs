@@ -52,6 +52,14 @@ export async function seed() {
     });
     cleanups.push(() => fake.close());
     fake.systemDown('down');
+    // Live sessions for the comment picker (GET /api/instances), and one that ended.
+    const instance = (sessionId, project, worktree, displayLabel, lastResponseAt, status = 'idle') => ({ sessionId, project, worktree: worktree ? { worktreeName: worktree } : null, status, displayLabel, lastResponseAt, createdAt: 1 });
+    fake.state.instances = [
+      instance('s-wt1', 'app', 'wt1', 'Worktree worker', 3000),
+      instance('s-app', 'app', null, 'Main checkout <b>review</b>', 5000, 'busy'),
+      instance('s-box', 'box', null, 'Box tidy-up', 4000),
+      instance('s-old', 'app', 'wt1', 'Finished run', 9000, 'exited'),
+    ];
 
     // PROJECTS_ROOT and the plugin data dir are blanked: this backend must never see the real ones.
     const backend = await bootServer({

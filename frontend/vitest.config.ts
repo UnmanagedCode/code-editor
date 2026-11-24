@@ -17,6 +17,8 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     include: ['src/**/*.test.{ts,tsx}'],
+    // Gated: `npm run test:cc` runs these against a code-conductor checkout.
+    exclude: ['src/**/*.cc.test.ts'],
     setupFiles: ['src/test/setup.ts'],
     testTimeout: 15_000,
   },

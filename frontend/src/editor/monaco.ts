@@ -55,16 +55,41 @@ export const monacoHost: EditorHost = {
     const actions = [
       shortcut(editor, 'code-editor.save', 'Save', monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, options.onSave),
       shortcut(editor, 'code-editor.quickOpen', 'Quick open', monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, options.onQuickOpen),
+      editor.addAction({
+        id: 'code-editor.comment', label: 'Comment on selection…',
+        // Ctrl/Cmd+K Ctrl/Cmd+M: Monaco binds no Ctrl+K chord to M.
+        keybindings: [monaco.KeyMod.chord(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyM)],
+        contextMenuGroupId: 'navigation', contextMenuOrder: 100,
+        run: () => options.onComment(),
+      }),
+    ];
+    const highlight = editor.createDecorationsCollection();
+    const listeners = [
+      editor.onDidChangeCursorSelection((e) => options.onSelectionChange(!e.selection.isEmpty())),
+      editor.onDidChangeModelContent(() => highlight.clear()),
     ];
     return {
       focus: () => editor.focus(),
-      revealLine(line: number) {
-        editor.revealLineInCenter(line);
-        editor.setPosition({ lineNumber: line, column: 1 });
+      revealRange(start: number, end: number | null) {
+        const lines = editor.getModel()?.getLineCount() ?? 1;
+        const first = Math.min(start, lines);
+        const last = Math.min(end ?? start, lines);
+        editor.revealLinesInCenter(first, last);
+        editor.setPosition({ lineNumber: first, column: 1 });
+        highlight.set([{ range: new monaco.Range(first, 1, last, 1), options: { isWholeLine: true, className: 'cc-ref-highlight' } }]);
         editor.focus();
       },
+      getSelection() {
+        const sel = editor.getSelection();
+        const model = editor.getModel();
+        if (!sel || !model || sel.isEmpty()) return null;
+        const start = sel.startLineNumber;
+        const endLine = sel.endColumn === 1 && sel.endLineNumber > start ? sel.endLineNumber - 1 : sel.endLineNumber;
+        return { range: { start, end: endLine > start ? endLine : null }, text: model.getValueInRange(sel) };
+      },
       dispose() {
-        for (const a of actions) a.dispose();
+        for (const a of [...actions, ...listeners]) a.dispose();
+        highlight.clear();
         editor.dispose();
       },
     };

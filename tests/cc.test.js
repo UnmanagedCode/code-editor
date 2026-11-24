@@ -107,7 +107,10 @@ test('api/roots shapes projects with worktrees, system placement, and unreachabl
   assert.equal(r.status, 200);
   const by = Object.fromEntries(r.body.projects.map((p) => [p.name, p]));
   assert.deepEqual(r.body.projects.map((p) => p.name), ['alpha', 'bad', 'down', 'zeta']);
-  assert.deepEqual(by.zeta.worktrees, [{ name: 'w1', branch: 'code-conductor/w1' }]);
+  assert.deepEqual(by.zeta.worktrees, [{ name: 'w1', branch: 'code-conductor/w1', path: root }]);
+  assert.equal(by.zeta.path, root);
+  assert.equal(by.alpha.path, '/srv/cc-remote/alpha', 'a remote project carries the path cc reports on its System');
+  assert.equal(by.bad.path, null, 'a project cc reports no path for has a null path');
   assert.equal(by.zeta.system, 'local');
   assert.equal(by.zeta.remoteId, null);
   assert.equal(by.alpha.system, 'docker');

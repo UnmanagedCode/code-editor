@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { LineRange } from '@/lib/ccLink';
 
 /** A text buffer. Dirty = `getAlternativeVersionId()` differs from the version recorded at the last save/load. */
 export interface EditorModel {
@@ -10,10 +11,18 @@ export interface EditorModel {
   dispose(): void;
 }
 
+/** A non-empty selection: the lines it covers and exactly its text. */
+export type Selection = { range: LineRange; text: string };
+
 export interface EditorHandle {
   focus(): void;
-  /** Scrolls `line` (1-based) to the centre, puts the cursor at its start, and focuses the editor. */
-  revealLine(line: number): void;
+  /**
+   * Scrolls `start`..`end` (1-based; `end` null = one line) to the centre, puts the cursor at the start, focuses the editor,
+   * and highlights the whole lines until the next edit or reveal.
+   */
+  revealRange(start: number, end: number | null): void;
+  /** The primary selection, or null when it is empty. A selection ending at column 1 does not cover that last line. */
+  getSelection(): Selection | null;
   dispose(): void;
 }
 
@@ -24,7 +33,13 @@ export interface DiffHandle {
 
 export type DiffOptions = { narrow: boolean; path: string; /** Ctrl/Cmd+S in the diff's editable (live) side. */ onSave: () => void; /** Ctrl/Cmd+P in the diff's editable side. */ onQuickOpen: () => void };
 
-export type MountOptions = { readOnly: boolean; narrow: boolean; onSave: () => void; onQuickOpen: () => void };
+export type MountOptions = {
+  readOnly: boolean; narrow: boolean; onSave: () => void; onQuickOpen: () => void;
+  /** The editor's "Comment on selection…" action (context menu and its keybinding). */
+  onComment: () => void;
+  /** Whether the selection is non-empty, on every change. */
+  onSelectionChange: (hasSelection: boolean) => void;
+};
 
 export type ThemeDefinition = {
   base: 'vs' | 'vs-dark';

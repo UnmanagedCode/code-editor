@@ -9,7 +9,7 @@ const FILES = { 'a.txt': 'a', 'src/main.ts': 'm', 'src/lib/util.ts': 'u' };
 
 async function setup(files: Record<string, string> = FILES) {
   const backend = installBackend({ files });
-  const ctx = renderWithHost(<Workspace target={target} initialFile={null} onFileChange={() => {}} />);
+  const ctx = renderWithHost(<Workspace target={target} rootPath="/srv/app" initialFile={null} reveal={null} onRevealHandled={() => {}} onFileChange={() => {}} />);
   await screen.findByRole('treeitem', { name: /a\.txt/ });
   return { backend, ...ctx };
 }

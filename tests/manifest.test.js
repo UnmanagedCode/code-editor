@@ -36,3 +36,16 @@ test('menu items: a project and a worktree entry with trimmed labels and a path 
     assert.ok(m.path.startsWith('/') && !m.path.startsWith('//'));
   }
 });
+
+test('conventions: one conductor-scope entry, correctly shaped, whose fragment file exists in the plugin', () => {
+  // Invariant: the link convention is contributed to the conductor only, never to projects or workspaces.
+  assert.equal(manifest.conventions.length, 1);
+  const [c] = manifest.conventions;
+  assert.deepEqual(Object.keys(c).sort(), ['description', 'file', 'name', 'scope', 'slug']);
+  assert.equal(c.scope, 'conductor');
+  assert.match(c.slug, /^[a-z][a-z0-9-]*$/);
+  assert.ok(c.slug.length <= 40);
+  for (const k of ['name', 'description']) assert.ok(typeof c[k] === 'string' && c[k].trim() === c[k] && c[k].length > 0, k);
+  assert.match(c.file, /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$)).+\.md$/);
+  assert.ok(fs.statSync(path.join(root, c.file)).isFile(), `${c.file} exists`);
+});

@@ -11,7 +11,7 @@ const FILES = { 'a.txt': 'alpha\n', 'b.txt': 'beta\n', 'bom.txt': `${BOM}hello\n
 
 async function open(name = 'a.txt', onFileChange: (p: string | null) => void = () => {}) {
   const backend = installBackend({ files: FILES, limitBytes: 2_097_152 });
-  const ctx = renderWithHost(<Workspace target={target} initialFile={null} onFileChange={onFileChange} />);
+  const ctx = renderWithHost(<Workspace target={target} rootPath="/srv/app" initialFile={null} reveal={null} onRevealHandled={() => {}} onFileChange={onFileChange} />);
   await ctx.user.click(await screen.findByRole('button', { name: new RegExp(`^${name.replace('.', '\\.')}$`) }));
   await waitFor(() => expect(ctx.fake.liveMounts().length + (name === 'blob.bin' ? 1 : 0)).toBeGreaterThan(0));
   return { backend, ...ctx };

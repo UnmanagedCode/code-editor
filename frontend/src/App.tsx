@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RootBrowser, RootPicker, rootLabel, type RootChoice } from '@/components/RootPicker';
 import { SwitchRootDialog } from '@/components/SwitchRootDialog';
-import { Workspace, type WorkspaceHandle } from '@/components/Workspace';
+import { Workspace, type RevealRequest, type WorkspaceHandle } from '@/components/Workspace';
+import { activeSession } from '@/lib/ccBridge';
+import { placeForPath } from '@/lib/placeFor';
 import { resolveCcRequest, useRoots } from '@/state/roots';
 import { useRoute } from '@/state/route';
 
@@ -16,17 +18,33 @@ export function App() {
   const [initialFile, setInitialFile] = useState<string | null>(route.file);
   const [switching, setSwitching] = useState<{ dirty: string[]; busy: boolean } | null>(null);
   const [ccError, setCcError] = useState<string | null>(null);
+  // A deep link waiting for the workspace of its root (which may first need a root switch).
+  const [reveal, setReveal] = useState<(RevealRequest & { root: RootChoice }) | null>(null);
+  const revealSeq = useRef(0);
   const workspace = useRef<WorkspaceHandle>(null);
   // The open file of the committed root, so Cancel can put the whole route back (the URL already names the new root).
   const committedFile = useRef<string | null>(route.file);
 
-  // A cc ⋮ menu request (untrusted text) becomes the route only when api/roots lists it.
+  // A cc request (untrusted text) changes the route only when api/roots lists its place: a ⋮ menu item's project/worktree,
+  // or the root containing a deep link's absolute path. An unresolved one leaves the open root alone.
   useEffect(() => {
     if (!cc || loading) return;
-    if (projects) {
-      const resolved = resolveCcRequest(projects, cc);
-      if (resolved) { setCcError(null); setRoute({ project: resolved.project, worktree: resolved.worktree, file: null }); }
-      else setCcError(`Project not found: ${cc.project}${cc.worktree ? ` / ${cc.worktree}` : ''}`);
+    if (cc.kind === 'place') {
+      if (projects) {
+        const resolved = resolveCcRequest(projects, cc);
+        if (resolved) { setCcError(null); setRoute({ project: resolved.project, worktree: resolved.worktree, file: null }); }
+        else setCcError(`Project not found: ${cc.project}${cc.worktree ? ` / ${cc.worktree}` : ''}`);
+      }
+    } else {
+      const place = projects && !cc.invalid ? placeForPath(cc.path, projects, activeSession()) : null;
+      if (!projects) setCcError(`Could not open ${cc.path}: the project list did not load`);
+      else if (!place) setCcError(`No project contains ${cc.path}`);
+      else {
+        setCcError(null);
+        const root = { project: place.project, worktree: place.worktree };
+        setReveal({ root, file: place.file, range: cc.range, seq: ++revealSeq.current });
+        setRoute({ ...root, file: place.file });
+      }
     }
     clearCc();
   }, [cc, projects, loading, setRoute, clearCc]);
@@ -45,6 +63,7 @@ export function App() {
   const commitSwitch = () => { setSwitching(null); setCommitted(urlRoot); setInitialFile(route.file); };
   const cancelSwitch = () => {
     setSwitching(null);
+    setReveal(null);
     setRoute({ project: committed?.project ?? null, worktree: committed?.worktree ?? null, file: committed ? committedFile.current : null });
   };
   const saveAllThenSwitch = async () => {
@@ -54,6 +73,8 @@ export function App() {
   };
 
   const current = committed ? (projects ?? []).find((p) => p.name === committed.project) : undefined;
+  const rootPath = (committed?.worktree ? current?.worktrees.find((w) => w.name === committed.worktree)?.path : current?.path) ?? null;
+  const onRevealHandled = useCallback(() => setReveal(null), []);
   const pick = (r: RootChoice) => setRoute({ project: r.project, worktree: r.worktree, file: null });
 
   return (
@@ -64,7 +85,10 @@ export function App() {
       </header>
       {ccError && <div className="p-3"><p role="alert" className="text-sm text-destructive">{ccError}</p></div>}
       {committed ? (
-        <Workspace key={rootLabel(committed)} ref={workspace} target={committed} initialFile={initialFile} onFileChange={onFileChange} />
+        <Workspace
+          key={rootLabel(committed)} ref={workspace} target={committed} rootPath={rootPath} initialFile={initialFile} onFileChange={onFileChange}
+          reveal={reveal && sameRoot(reveal.root, committed) ? reveal : null} onRevealHandled={onRevealHandled}
+        />
       ) : (
         <main className="mx-auto w-full max-w-xl flex-1 overflow-y-auto p-4">
           <h2 className="mb-2 text-lg font-medium">Open a project</h2>

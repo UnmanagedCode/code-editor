@@ -12,7 +12,7 @@ async function phone(coarse = true) {
   media.narrow = true;
   media.coarse = coarse;
   const backend = installBackend({ files: FILES });
-  const ctx = renderWithHost(<Workspace target={target} initialFile={null} onFileChange={() => {}} />);
+  const ctx = renderWithHost(<Workspace target={target} rootPath="/srv/app" initialFile={null} reveal={null} onRevealHandled={() => {}} onFileChange={() => {}} />);
   await waitFor(() => expect(backend.calls.list).toEqual(['']));
   return { backend, ...ctx };
 }
@@ -89,7 +89,7 @@ describe('desktop layout', () => {
   it('shows the Files | Search sidebar and no sheet buttons', async () => {
     media.narrow = false;
     installBackend({ files: FILES });
-    renderWithHost(<Workspace target={target} initialFile={null} onFileChange={() => {}} />);
+    renderWithHost(<Workspace target={target} rootPath="/srv/app" initialFile={null} reveal={null} onRevealHandled={() => {}} onFileChange={() => {}} />);
     await screen.findAllByRole('treeitem');
     expect(screen.getByRole('tab', { name: 'Files' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Search' })).toBeTruthy();
