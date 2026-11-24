@@ -21,12 +21,13 @@ export default async function ({ page, url, app, world, shot, check }) {
   const action = app.getByRole('menuitem', { name: /Comment on selection/ });
   await action.waitFor();
   await shot('context-menu');
-  // Monaco's menu drops a click that lands right after it opens (its guard against the opening right-click's release).
-  await action.hover();
-  await page.waitForTimeout(300);
-  await action.click();
-
+  // Monaco's menu drops a click that lands right after it opens (its guard against the opening right-click's release),
+  // so click while the item is shown and enabled until the dialog it opens appears, a bounded number of times.
   const dialog = app.getByRole('dialog', { name: 'Comment on selection' });
+  for (let attempt = 1; ; attempt++) {
+    if (await action.isVisible() && await action.isEnabled()) await action.click({ timeout: 2000 }).catch(() => {});
+    try { await dialog.waitFor({ timeout: 1000 }); break; } catch (e) { if (attempt === 5) throw e; }
+  }
   const picker = dialog.getByRole('combobox', { name: 'Send to' });
   await picker.waitFor();
   check(await picker.inputValue() === SESSION.sessionId, 'cc’s active session in this worktree is preselected');

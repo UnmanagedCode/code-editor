@@ -42,7 +42,8 @@ Select text in the editor and send a comment about it to a live cc session. The 
 The plugin teaches the conductor to write these links: `conductor.plugin.json` contributes the conductor convention **Code Editor links** (`code-editor/code-links`, text in `conventions/code-links.md`).
 
 - **On by default** while the plugin is enabled; switch it off under **Settings → Conventions → Conductor**. Disabling the plugin drops it.
+- **Needs a cc whose transcript links open `#plugin/code-editor/?…` deep links** (cc's `viewLinkHash`). On an older cc, switch the convention off under Settings → Conventions → Conductor, or the conductor writes dead links.
 - **Takes effect** on the next conductor spawn or context refresh.
 - **Two parts:** a one-sentence instruction with the link template, composed into the conductor's system prompt; the details (encoding, which path, ranges, link text, unmatched paths) as the skill `cc-conductor-code-editor:code-links`.
 - **Conductor only:** no project or workspace convention, so workers are not told to write links.
-- The link format itself is specified once, in [protocol → Deep links](protocol.md#deep-links).
+- The link format is specified in [protocol → Deep links](protocol.md#deep-links). The convention's skill restates its encoding for the model; `frontend/src/lib/codeLinksConvention.test.ts` keeps the two in step with `encodeCcPath`.
